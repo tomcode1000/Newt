@@ -1,0 +1,402 @@
+NEWT - BUILD PLAN
+=================
+For: neatHack (neatlogs), one track "Build an agent that works
+(literally)". Read ./BRIEF.txt first.
+Window: 10 Oct 07:00 UTC -> submit 12 Oct 13:30-18:25 UTC (X quote-post).
+All times below are UTC (Lagos = UTC+1).
+Solo. If a step runs over, cut from the bottom of the cut list
+(section 8), never from the demo path.
+
+
+UPDATE 10 OCT (after check-in, team "topspot") - overrides below
+- neatlogs: ALL paid plans free during neatHack -> no 3-investigation
+  cap. Use investigations, detectors and evals freely.
+  SDK: neatlogs.init(api_key=NEATLOGS_API_KEY, workflow_name=...);
+  client = neatlogs.wrap(Anthropic()); neatlogs.flush() before exit.
+  Use the PROJECT API key, not the nlw_ HTTP key (401). Check with
+  `python -m neatlogs doctor --probe` (TRACE_VISIBLE + TRACE_FINALIZED).
+  Claude can read traces itself: `npm i -g neatlogs-cli@0.2.0`, then
+  `neatlogs auth login --device` (user approves in browser once), then
+  `neatlogs traces list / get <id> --json`. Setup guide:
+  https://neatlogs.com/hackathon/neatlogs-setup-guide.html
+- Entire: separate "Best Use of Entire" prize (creative use of
+  Checkpoints, Graph or Brain). Windows install (PowerShell):
+  `irm https://entire.io/install.ps1 | iex`. Then in the repo:
+  `entire enable --agent claude-code` (confirm the name), commit,
+  `entire checkpoint list`, `entire checkpoint explain HEAD`.
+  Optional: `entire plugin install graph`, `entire graph init-agents
+  --repo .`, `entire graph stats --repo .` (tokens saved - a number
+  for the README). Submission needs a checkpoint LINK + ID:
+  https://entire.io/gh/OWNER/REPO/commit/FULL_COMMIT_SHA
+  Sign in at entire.io with GitHub + install the Entire GitHub App.
+  Guide: https://hack.entire.io/neathacks-2026/
+- NEW - Entire inside Newt at runtime (aim for Best Use of Entire):
+  when Newt diagnoses a break, it asks WHY the library changed. If the
+  library repo has Entire checkpoints, Newt reads the session behind
+  the breaking commit (`entire checkpoint explain <sha>`) and cites the
+  author's own reason in the PR ("renamed because ..."). Demo world:
+  lumen-sdk is built with Claude Code + Entire, so its v2.0 rename has
+  a real checkpoint for Newt to cite. Real repos without Entire fall
+  back to changelog + commit message.
+- cfo.ai: sign up via https://cfo.ai/neathacks (card needed), CANCEL
+  straight away in Settings -> Billing. Credits come from organisers.
+- Build log: neatlogs' skill (https://neatlogs.com/hackathon/skill) asks
+  for hackathon.md at the repo root - project, team, stack, dated build
+  log with failures/fixes/evidence, demo, limits, submission status.
+  Claude keeps it updated after each session. No secrets in it.
+- Crustdata promo NEATLOGS-OCT2026 - not needed for Newt.
+
+------------------------------------------------------------------------
+0. TONIGHT (9 Oct) - PREP ONLY, NO PROJECT CODE
+------------------------------------------------------------------------
+[ ] AWS account ready (credits go to the first 200 teams at check-in).
+    The credits can pay for Claude via Amazon Bedrock.
+[ ] Accounts: neatlogs (app.neatlogs.com), Entire (entire.io), cfo.ai,
+    X account to post from. Crustdata not needed.
+[ ] Install the Entire CLI; read its quickstart (how to enable in a repo).
+[ ] Read neatlogs Python SDK docs (docs.neatlogs.com/sdk): does it trace
+    the Anthropic SDK automatically, or do we wrap calls / use
+    OpenTelemetry?
+[ ] Model access: Anthropic API key, or Bedrock once AWS credits land.
+[ ] gh CLI logged in (for pull requests).
+[ ] docker pull python:3.12-slim  (Docker 29 already installed)
+[ ] Empty Python 3.12 venv with: anthropic, docker, rich, httpx,
+    markdownify, pytest, neatlogs. Smoke-test imports only.
+[ ] Discord questions (BRIEF section 11).
+[ ] Name clash check: GitHub / npm / X for "newt-docs", "@newtdocs".
+
+10 Oct:
+  02:30  Web check-in: https://neatlogs.com/hackathon/check-in  (AWS)
+  03:30  Kickoff call.
+  07:00  Build starts.
+
+
+------------------------------------------------------------------------
+1. STACK
+------------------------------------------------------------------------
+Language:   Python 3.12 (neatlogs Python SDK; Docker SDK is mature).
+Models:     Claude via the Anthropic SDK, plain tool-use loop (no agent
+            framework - fewer moving parts, full control of traces).
+              workers:      claude-sonnet-5-5
+              coordinator:  claude-opus-5-5 (clustering, judgement calls)
+            Switch to Bedrock if AWS credits arrive; same models.
+Sandboxes:  Docker, one fresh python:3.12-slim container per page run,
+            network on, CPU/mem limits, commands via docker exec with a
+            timeout. Thrown away after every run.
+State:      SQLite run ledger (crash-safe resume).
+Display:    Terminal live table with `rich` (pages x status, causes,
+            events). Good enough on video. Web dashboard = cut list.
+Tracing:    neatlogs on every model call, tool call and worker run.
+Repo hist.: Entire enabled from the first commit.
+Hosting:    Local. Public GitHub repo, MIT licence.
+
+Layout:
+  newt/
+    BRIEF.txt  BUILD-PLAN.txt  README.md  LICENSE
+    newt/
+      sandbox.py      container lifecycle: start, exec, bg process,
+                      port wait, file read/write, teardown
+      tools.py        tool schemas + handlers for the worker
+      worker.py       the per-page agent loop -> Verdict
+      coordinator.py  queue, parallel workers, clustering, fix/verify
+      fixer.py        rewrites a page for one root cause
+      watcher.py      polls package index for new releases mid-run
+      ledger.py       SQLite: runs, pages, attempts, verdicts, causes,
+                      fixes, prs, events
+      prs.py          branch, commit, gh pr create
+      ui.py           rich live view
+      cli.py          `newt run <docs dir|url>`, `newt pr` (PR mode),
+                      `newt nightly`, `newt resume`, `newt bench`
+      affected.py     PR mode: diff -> changed symbols -> docs pages
+                      that mention them
+      sources.py      load pages from a repo folder OR a live website
+                      URL (HTML -> markdown, follow the sidebar links)
+      entire_ctx.py   read the Entire checkpoint behind a commit
+                      (`entire checkpoint explain <sha>`) for diagnosis
+    action/
+      action.yml      the GitHub Action (composite: setup python,
+                      pip install, `newt pr`)
+    skill/
+      SKILL.md        companion skill for coding agents: "before you
+                      finish, run `newt run` on the docs you touched"
+    hackathon.md      build log (neatlogs skill format)
+    bench/
+      pages.yaml      bench pages + known answers
+      score.py        scores a run against the answers
+    demo/
+      lumen-docs/     small demo docs repo (our own, for the PR demo)
+      lumen-sdk/      tiny demo library, v1.0 and v2.0 (rename)
+      index/          local package index (pypiserver) to publish v2.0
+                      mid-run
+    tests/
+
+
+------------------------------------------------------------------------
+2. THE WORKER (one page, one sandbox)
+------------------------------------------------------------------------
+Input: a page (markdown, from the repo source if possible, else fetched
+HTML -> markdown), the docs' base URL, any test keys provided.
+
+Tools the model can call:
+  run(cmd, timeout=120, background=false)   shell in the sandbox
+  write_file(path, content) / read_file(path)
+  wait_for_port(port, timeout)              for "start the server" steps
+  fetch(url)                                changelog, release notes,
+                                            PyPI JSON, library source
+                                            on GitHub - read-only
+  git_context(sha)                          PR diff / commit message +
+                                            the Entire checkpoint behind
+                                            the commit, if the repo has
+                                            Entire (entire_ctx.py)
+  report(verdict)                           ends the run
+
+Loop (system prompt rules):
+  1. Plan: list the page's steps in order, mark implicit ones you add.
+  2. Follow each step EXACTLY as written first. Never "improve" the
+     docs while following them - that would hide the break.
+  3. On failure, decide whose fault:
+       AGENT   I mistyped, my sandbox lacks something any reader's
+               machine would have, I misread a step -> fix, retry
+               (max 3 times per step)
+       DOCS    the page as written cannot work -> find WHY (fetch
+               changelog / release notes / source), note the version
+       HUMAN   needs sign-up, phone, payment, captcha, a real account
+               -> stop that step, mark, continue if possible
+       GLITCH  network timeout, registry 5xx, rate limit -> back off,
+               re-run the step later (not a docs fault, not a fix)
+       UNSURE  none of the above is clearly true -> send NOTHING;
+               flag for a person with the evidence
+  4. Report.
+
+DOCS-FAULT GATE (added 10 Oct - the anti-spam rule, the demo's core):
+  A docs_broken verdict may produce a fix only if the evidence says so,
+  never on the model's say-so alone. Confidence is built from checks:
+    a. reproduces: the same step fails the same way in a FRESH sandbox
+    b. explained: the history shows why (PR diff / changelog / Entire
+       checkpoint names the renamed or removed thing)
+    c. fixed: the corrected page passes a full re-run from zero
+  a + b -> write the fix; a + b + c -> send it. Missing a or b ->
+  UNSURE (flag, send nothing). Every gate decision is a traced span
+  in neatlogs, so the trace shows WHY each fix was or wasn't sent.
+
+Verdict (JSON):
+  status:        pass | docs_broken | needs_human | agent_gave_up
+  failing_step:  index + the exact text of the step
+  evidence:      command, output tail, versions installed
+  cause:         one sentence + source URL (changelog line, commit)
+  suggested_fix: the corrected step text
+  packages:      names + versions installed (feeds the watcher)
+  confidence:    0-1
+
+Guards: step and token budget per page; every command logged to the
+ledger and traced; a run that hits the budget reports agent_gave_up
+(never a fake pass).
+
+
+------------------------------------------------------------------------
+2b. THE THREE MODES (BRIEF section 4)
+------------------------------------------------------------------------
+newt run ./docs     Local (situation 1). All pages in the folder, against
+                    the code in the working tree (installed into the
+                    sandbox from the local checkout).
+newt pr             PR mode (situation 2, MAIN). Inputs from the Action:
+                    base sha, head sha, repo. Steps:
+                      1. git diff base..head -> changed files + symbols
+                         (renamed/removed functions, CLI flags, env vars,
+                         config keys) - model call over the diff
+                      2. affected.py: docs pages that mention them
+                         (grep + model check); always include README
+                      3. run those pages in sandboxes against HEAD code
+                      4. broken -> fixer edits the docs files -> verify
+                         from zero -> push a fix commit to the PR branch
+                      5. post one PR comment (pass table or fix summary,
+                         with Entire checkpoint link when present)
+newt nightly <url>  Live website (situation 3). sources.py reads the
+                    live docs pages, runs them against LATEST releases,
+                    opens a fix PR to the docs repo if one is given,
+                    else writes a report with exact fixes.
+
+Action (action/action.yml): composite action, inputs docs, mode,
+anthropic key secret, neatlogs key secret. Uses GITHUB_TOKEN to comment
+and push the fix commit. Docker is available on ubuntu-latest runners,
+so sandboxes work in CI the same as locally.
+
+
+------------------------------------------------------------------------
+3. THE COORDINATOR (combining results) + THE CHANGING WORLD
+------------------------------------------------------------------------
+  1. Load pages, write them to the ledger, start N workers in parallel
+     (N=4 on this laptop; asyncio + threads for docker calls).
+  2. Collect verdicts as they land.
+  3. Cluster docs_broken verdicts by root cause (model call with all
+     causes + evidence): "7 pages, same rename in v3.0" -> 1 cause.
+  4. Disagreement check: if pages using the same API got different
+     verdicts, re-run the odd one out in a fresh sandbox before
+     deciding. Log the reasoning.
+  5. Per cause: fixer rewrites all affected pages -> verifier runs a
+     FRESH worker on each fixed page (strict mode: must pass as
+     written). Only verified fixes go into the PR.
+  6. One PR per repo: summary, causes, evidence, before/after output,
+     pages needing a human.
+
+Watcher (runs during the whole run):
+  - Every 30 s, checks the package index for new versions of every
+    package any worker installed.
+  - New release -> event -> coordinator re-queues pages that use that
+    package, including ones that passed. The ui shows "re-checking".
+
+Resume:
+  - Every state change written to the ledger before acting.
+  - `newt resume` picks up: finished pages stay finished, running pages
+    restart in a fresh sandbox, a PR already opened is never reopened.
+
+
+------------------------------------------------------------------------
+4. THE DEMO WORLD (same in every take)
+------------------------------------------------------------------------
+lumen-sdk: tiny Python library. v1.0 has lumen.charge(); v2.0 renames
+  it to lumen.payments.create() and changes a config env var name.
+lumen-docs: ~8 pages written against v1.0, including:
+  - 3 pages that use charge()                 -> one root cause
+  - 1 page with a background server step      -> tests wait_for_port
+  - 1 page that needs a phone check           -> needs_human
+  - 1 page that needs a system library        -> tempts a false alarm
+  - 2 pages that are fine
+Local index: start with only v1.0 published. Mid-run, a script
+  publishes v2.0 -> watcher fires -> passed pages go red -> fixed.
+PR goes to OUR lumen-docs repo on GitHub.
+
+MAIN DEMO (PR mode): lumen-sdk is ONE public repo with code + README +
+docs/, Entire enabled, Newt Action installed. On camera, Claude Code is
+asked to "split charge() into payments.create()". It renames, tests
+pass, opens a PR, README untouched. Newt Action runs: README + 2 guides
+red -> diagnosis cites the PR diff and the Entire checkpoint -> fix
+commit on the PR -> re-run green -> PR comment. Rehearse it twice; keep
+a recorded fallback take.
+
+
+------------------------------------------------------------------------
+5. THE TEST BENCH (the v1 vs v2 numbers)
+------------------------------------------------------------------------
+Real docs pages with known answers. Main source: OLD docs versions of
+popular libraries run against TODAY's release - known breaks, and the
+newer docs version is the answer key. Plus current pages that should
+pass, plus pages that tempt false alarms.
+
+Candidates - VERIFY EACH ONE IN THE WINDOW before it goes in the bench:
+  - SQLAlchemy 1.3/1.4 tutorial: engine.execute(...) removed in 2.0
+  - pandas 1.x page using DataFrame.append (removed in 2.0)
+  - NumPy page using np.float / np.float_ (removed)
+  - Pydantic v1 settings page: from pydantic import BaseSettings
+    (moved to pydantic-settings in v2)
+  - Flask 2.x page importing Markup/escape from flask (removed in 3.0)
+  - current quickstarts of the same libraries (should pass)
+  - a page needing a background server, a page needing a system lib
+Target size: 12-15 pages. Say the size in the README.
+
+bench/score.py: per page compare status (+ cause for docs_broken) to
+the answer key -> recall, false alarms, verified fixes, needs_human
+correct, cost/minutes per page.
+
+v1 = the first working version, scored as-is (expect false alarms on
+the system-lib and background-server pages). Then the neatlogs loop
+(section 6). v2 = same bench after the fix.
+
+BASELINE + "NOT THE DOCS' FAULT" CASES (added 10 Oct - the headline number):
+  Grow the bench to ~20 real docs breaks + ~20 failures that are NOT
+  the docs' fault. Build most of them as seeded pages in the lumen demo
+  world (fast, cheap, known answers); the real-library pages above count
+  toward the 20 breaks. Non-docs cases to seed:
+    - flaky local index: returns 503 on a set fraction of requests
+      (GLITCH), a slow server start (needs wait_for_port, not a fix),
+      a missing system lib any real machine has, an ambiguous but
+      correct step, a step needing an account (HUMAN)
+  baseline = the same worker with the gate OFF: every failure -> fix.
+  Score: wrong fixes sent, real breaks fixed, flagged-for-a-person.
+  Headline in README + video: "Fix-everything baseline: N wrong fixes
+  sent. Newt: M." Use only the numbers the run actually produces; say
+  the bench size.
+  If time runs short, shrink to ~10 + ~10 rather than drop it.
+
+
+------------------------------------------------------------------------
+6. THE neatlogs / ENTIRE / cfo.ai LOOP
+------------------------------------------------------------------------
+  1. Run bench with v1. Every run traced in neatlogs.
+  2. In neatlogs, find the false-alarm runs (filter / detectors / evals:
+     "verdict docs_broken but answer key says pass").
+  3. Use investigations (max 3 on free tier) on the worst ones -> root
+     cause in Newt (e.g. prompt lets the worker blame docs before
+     checking its own sandbox; no wait for the server).
+  4. Hand the fix brief to Claude Code. Commit (Entire checkpoint).
+  5. Run bench with v2. Compare traces + scores. Screenshots + links in
+     README.
+  6. cfo.ai: price per page checked per month; costs from neatlogs
+     (tokens + container minutes per page); plan in the repo.
+
+
+------------------------------------------------------------------------
+7. TIMELINE (UTC, solo, sleep included)
+------------------------------------------------------------------------
+SAT 10 OCT
+  02:30  Check-in. 03:30 kickoff call. Ask Discord questions.
+  07:00  Repo + LICENSE + Entire enabled + neatlogs tracing a hello
+         model call. POST #1 (kickoff, the idea).
+  08:00  sandbox.py + tools.py. One container, run/write/read/port.
+  10:00  worker.py: one demo page end to end -> correct verdict.
+  13:00  Same on 3 real bench pages. POST #2 (first traced run).
+  15:00  demo world: lumen-sdk v1/v2, lumen-docs, local index.
+  17:00  coordinator.py: parallel workers + ledger + rich ui.
+  21:00  clustering + disagreement re-run. POST #3.
+  23:00  Sleep.
+SUN 11 OCT
+  06:00  fixer + verifier + prs.py; `newt pr` (affected.py, fix commit,
+         PR comment) + action.yml; entire_ctx.py.
+  09:00  watcher + mid-run v2.0 publish + resume after kill.
+         POST #4 (release breaks a passed page; kill/resume clip).
+  12:00  Bench assembled + score.py. Run v1. Record numbers.
+  14:00  neatlogs loop (section 6) -> v2 -> numbers. POST #5 (v1 vs v2).
+  16:30  Companion skill (SKILL.md) + nightly mode on a live site.
+  17:00  In the wild: sponsors' quickstarts (neatlogs, Entire,
+         Crustdata, Dodo) + 3-5 popular open-source docs. Open 1-3 PRs
+         ONLY for verified breaks, reviewed by you first. POST #6.
+  21:00  Sleep.
+MON 12 OCT
+  05:00  cfo.ai plan. README: architecture diagram, how to run, bench
+         size + scores, trace links, Entire checkpoints/graph, failed
+         action + recovery, PR links, #neatHack links.
+  08:00  Record video (BRIEF section 10), edit, speed-ups. <= 3:00.
+  11:30  Final pass: fresh clone runs, links work, commits in window.
+  13:30  SUBMIT at the window opening: quote-post the official neatlogs
+         post with team, name, project, repo, demo. (First 50 get
+         engagement.) Window closes 18:25.
+
+
+------------------------------------------------------------------------
+8. CUT LIST (cut from the bottom first)
+------------------------------------------------------------------------
+MUST    sandbox, worker loop, verdicts, coordinator with parallel
+        workers + clustering, fixer + verifier, PR mode (`newt pr`) +
+        GitHub Action on the demo repo with fix commit + PR comment,
+        Entire checkpoint in the diagnosis, mid-run release, kill/resume,
+        bench v1 vs v2, neatlogs loop, Entire, cfo.ai, video, README,
+        hackathon.md.
+SHOULD  nightly mode on live website pages (sources.py HTML), real PR
+        on real docs, sponsors' docs run, companion skill (30 min),
+        disagreement re-run.
+NICE    web dashboard, `newt try <url>` side use, JS/npm docs support,
+        GitHub App.
+
+
+------------------------------------------------------------------------
+9. SUBMISSION CHECKLIST (judges must be able to see each)
+------------------------------------------------------------------------
+[ ] Before/after runs with numbers (bench v1 vs v2)
+[ ] neatlogs trace links or screenshots
+[ ] Entire checkpoints / entire-graph output
+[ ] cfo.ai plan: pricing, costs, revenue, runway
+[ ] A run where an action failed and the agent recovered
+[ ] #neatHack posts during the build (links)
+[ ] Public repo, commits dated inside the window
+[ ] Demo video <= 3 min
+[ ] Quote-post on X at 13:30 UTC 12 Oct

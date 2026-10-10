@@ -1,0 +1,298 @@
+NEWT - BUILD BRIEF
+==================
+Tagline:      Every doc, tried by a newcomer.
+Pitch:        Coding agents ship code faster than anyone updates the
+              docs. Newt follows your docs like a brand-new user and
+              fixes them before anyone gets stuck.
+Competition:  neatHack (neatlogs) - online, 48h, one track:
+              "Build an agent that works (literally)"
+              Rules:    https://neatlogs.com/hackathon/1
+              Discord:  https://neatlogs.com/discord
+              Team:     topspot (checked in 10 Oct)
+Written:      9 Oct 2026, rewritten 10 Oct (coding-agent angle, users,
+              install, the three situations, companion skill)
+Build plan:   ./BUILD-PLAN.txt
+Research log: ../research/HACKATHONS-OCT-2026.txt (section 6)
+
+ALL CODE IS WRITTEN INSIDE THE WINDOW (10 Oct 07:00 UTC -> 12 Oct).
+Commits must be dated inside it.
+
+There is ONE product in this brief. If a session finds itself building a
+general coding agent, a GitHub-issue fixer, a docs website generator or
+an observability tool, stop and re-read section 1.
+
+
+------------------------------------------------------------------------
+1. WHAT NEWT IS (explained simply)
+------------------------------------------------------------------------
+You bake a cake from a recipe book. The book says "use the blue oven",
+but someone swapped it for a red one and never changed the book. You
+follow the book exactly, and the cake fails.
+
+Newt is a robot that follows the recipe before anyone else does:
+  1. It goes into an empty, clean kitchen (a fresh computer).
+  2. It reads the recipe (the docs) and does EXACTLY what each step says.
+  3. When a step fails it asks: "did I mess up, or is the book wrong?"
+  4. If the book is wrong, it finds out what changed, fixes the recipe,
+     and bakes the whole cake again from zero to be sure.
+  5. It leaves the chef a note: "Step 3 was wrong. Here's the fix. I
+     tested it - it works now."
+
+Under the hood it is a TEAM of agents: one worker per docs page, in
+parallel, each in its own fresh sandbox, and a coordinator that merges
+their findings into root causes and fixes.
+
+
+------------------------------------------------------------------------
+2. THE PROBLEM - AND WHY IT IS GETTING WORSE
+------------------------------------------------------------------------
+A developer opens a product's "Getting started" page and follows it.
+Step 3 breaks: a function was renamed, an install command changed, or a
+step the team does without thinking was never written down. Most
+developers don't file a bug. They leave and try a competitor. The team
+never finds out, because nobody inside runs their own quickstart from an
+empty machine - theirs already has everything installed.
+
+NOW: coding agents (Claude Code, Cursor, Codex, Copilot) write much of
+the code. They rename a function, the tests pass, the PR merges - and
+the README and quickstart still show the old way. Code changes faster
+than docs can keep up, and fewer humans read every line.
+
+
+------------------------------------------------------------------------
+3. WHO IT IS FOR
+------------------------------------------------------------------------
+                    WHO                               ROLE
+Uses + pays         The team that MAKES the product:  Installs Newt on
+                    devrel / docs owner at an API,    THEIR OWN repo
+                    SDK or dev-tool company; open-
+                    source maintainers
+Benefits            The developer trying the          Never sees Newt -
+                    quickstart                        the docs just work
+
+Example: the neatlogs team installs Newt on the neatlogs repo. When
+their code changes and their setup guide breaks, Newt catches it before
+a developer trying neatlogs ever sees the error.
+
+Side use (bonus, not the pitch): `newt try <url>` - a developer checks
+someone else's quickstart and learns which step breaks and how to get
+past it. They don't pay, and only the owner can fix it for everyone.
+
+
+------------------------------------------------------------------------
+4. WHERE DOCS LIVE - AND THE THREE SITUATIONS NEWT COVERS
+------------------------------------------------------------------------
+Most docs websites are plain files in the GitHub repo (README.md,
+docs/quickstart.md) that a tool (Mintlify, Docusaurus, GitHub Pages)
+turns into the website. Newt fixes the FILES; the website updates the
+next time it is published.
+
+  GitHub repo                              Website
+  |-- src/          (the code)
+  |-- README.md   ---- build tool ---->    lumen.dev/docs/quickstart
+  `-- docs/quickstart.md
+
+SITUATION 1 - code changed on your computer, not pushed yet
+  The GitHub Action can't see it. Run Newt locally before pushing:
+    newt run ./docs
+SITUATION 2 - a PR changes the code, docs in the same repo  (MAIN CASE)
+  The Action starts Newt on the PR. Newt finds the docs pages that use
+  the changed code, runs them from zero against the PR's code, and if
+  they break adds a fix commit to the SAME PR. Code and docs ship
+  together. Website correct from the moment the code ships.
+SITUATION 3 - code already released, website docs out of date
+  Docs in a separate repo or website tool, OR another library the
+  quickstart uses released a new version. Nightly, Newt reads the LIVE
+  website page, follows it against the LATEST released versions, and:
+    - docs files in a GitHub repo -> opens a fix PR there
+    - docs edited in a browser tool -> sends a report with the exact fix
+
+Hackathon builds 2 and 3. Situation 1 is the same command run locally.
+
+
+------------------------------------------------------------------------
+5. HOW IT IS INSTALLED AND USED
+------------------------------------------------------------------------
+A. GitHub Action (the main way) - one file in the repo:
+     # .github/workflows/newt.yml
+     on: [pull_request]
+     jobs:
+       newt:
+         runs-on: ubuntu-latest
+         steps:
+           - uses: newt-docs/newt@v1
+             with:
+               docs: ./docs
+   + the Claude API key as a GitHub secret. Same Action on a schedule
+   (nightly) or on release covers situation 3.
+B. Command line:   pip install newt-docs  ->  newt run ./docs
+C. Companion skill for coding agents (see section 7).
+
+Day to day, on a PR:
+  1. GitHub starts Newt.
+  2. Newt finds which docs pages use the changed code.
+  3. Runs them from zero, each in a fresh sandbox, exactly as written.
+  4. All pass -> PR comment:
+       "README and 3 guides tested from scratch - all work."
+  5. Something breaks -> PR comment + fix commit:
+       "This PR renamed charge(). README step 3 and 2 guides still use
+        the old name - a new user would fail here. Fix commit added,
+        tested from scratch: all pass."
+  6. Team reviews, merges. Code and docs stay in step.
+
+
+------------------------------------------------------------------------
+6. WHY IT HAS TO BE AN AGENT (not a script)
+------------------------------------------------------------------------
+Snippet runners that run code blocks exist. Real docs are prose: "create
+a project", "put your key in a .env file", "run the server in another
+terminal". Following them takes judgement. Newt's loop:
+
+  READ + PLAN   Turn prose into concrete steps, including ones the
+                author forgot ("needs Python 3.11").
+  ACT           Run each step for real: shell, files, background servers.
+  LOOK          Read output and errors after every step.
+  DIAGNOSE      Whose fault is this failure?
+                  - mine (sandbox, my typo, missing system lib) -> fix
+                    my setup, retry
+                  - the docs' -> find WHY: the PR diff, the changelog,
+                    the library source, the Entire checkpoint behind
+                    the commit (section 8)
+                  - nobody can do it here (phone check, paid plan,
+                    captcha) -> "needs a human", move on
+  FIX + VERIFY  Write the corrected page, re-run the whole page from zero
+                in a NEW sandbox. A fix only counts if that passes.
+  REPORT        PR comment / fix commit / fix PR, with evidence.
+
+
+------------------------------------------------------------------------
+7. "WHY NOT JUST A SKILL?" (judges may ask - this is the answer)
+------------------------------------------------------------------------
+A skill ("whenever you change code, update the docs") helps, but:
+  1. It is a reminder, not a guarantee. Agents still forget, especially
+     in long sessions.
+  2. Updating docs is not proving they work. The agent's machine has
+     everything installed - the same blind spot humans have. Only a run
+     from an EMPTY machine proves a newcomer won't get stuck.
+  3. It only covers the agent that has it. Docs also break from human
+     changes, other agents without the skill, library releases, and
+     docs on a website or another repo the agent never opens.
+  4. Nobody should grade their own homework. That's why we have tests
+     and code review.
+
+So Newt ships WITH a skill:
+  - Skill = the reminder: "before you finish, run `newt run` on the docs
+    your change touches."
+  - Newt = the proof: fresh sandbox, follows the docs, fixes them.
+  - GitHub Action = the safety net for everything the skill misses.
+  "The skill makes the agent remember. Newt makes sure it's right."
+
+
+------------------------------------------------------------------------
+8. THE TWO TRACK THEMES + HOW THE THREE TOOLS ARE USED
+------------------------------------------------------------------------
+A. Workers + coordinator: one worker per page in parallel; coordinator
+   clusters failures by root cause (7 pages, 1 rename = 1 fix), assigns
+   a fixer per cause, sends fixed pages to a verifier, re-checks when
+   two workers disagree, decides what goes in the PR and what goes to a
+   human.
+B. Changing environment: installs pull the latest versions; a watcher
+   sees new releases mid-run and re-queues affected pages, even ones
+   that passed. Demo: we publish v2.0 of a demo library mid-run on a
+   local package index. Crash-safe: kill the process, it resumes.
+
+neatlogs  Trace every run. BEFORE/AFTER: v1 blames the docs for its own
+          sandbox mistakes and misses real breaks -> neatlogs flags the
+          bad runs -> investigation -> root cause in Newt -> Claude Code
+          ships the fix -> v2 on the same bench, side-by-side numbers.
+          Paid plans free during neatHack: use investigations freely.
+Entire    (1) We build Newt with Claude Code + Entire: every commit
+          checkpointed, v1 -> v2 fix linked to its session.
+          (2) AT RUNTIME (aim: "Best Use of Entire" prize): when a PR
+          from a coding agent breaks the docs, Newt reads that commit's
+          Entire checkpoint - what the agent was asked, what it decided
+          - and writes the docs fix using the agent's own reasoning:
+          "The agent renamed charge() to split payments by type (session
+          link). It never touched README step 3. Fixed and tested."
+cfo.ai    Business plan: price per page checked per month (or per repo)
+          for devrel teams; costs = tokens + sandbox minutes per page
+          from neatlogs; revenue, runway.
+
+
+------------------------------------------------------------------------
+9. THE SCORECARD (the numbers judges ask for)
+------------------------------------------------------------------------
+On a fixed test bench of real docs pages with known answers:
+  real breaks found, false alarms, fixes that pass a clean re-run,
+  pages correctly sent to a human, cost and minutes per page.
+  v1 vs v2, same bench.
+In the wild: real docs checked, breaks found, PRs opened / merged.
+
+
+------------------------------------------------------------------------
+10. WHAT EXISTS (checked 9 Oct 2026)
+------------------------------------------------------------------------
+Nothing found that follows docs in a clean machine and fixes them.
+  - Mintlify agent: opens docs PRs; only checks the docs BUILD.
+  - PostHog content writer agent: humans check examples by reading.
+  - Snippet runners / doc-test tools: code blocks only, no prose, no
+    diagnosis, no fixes.
+  - "Update the docs" rules/skills for coding agents: reminders only
+    (section 7).
+Nearby, different: repo-setup agents (Repo2Run, GitHub Next Discovery
+Agent), issue reproducers (Metabase Repro-Bot, Osloq), flaky-test fixers
+(Semaphore, FlakyGuard). neatlogs itself traces YOUR agent - not docs.
+To do at kickoff: scan neatlogs changelog/blog + Discord (2 minutes).
+
+FOUND 10 Oct - closest rival, missed above:
+  - quickstarted (PyPI, v0.6.x, "early"): a sandboxed agent (docker)
+    tries to finish your quickstart using only your docs. You hand-write
+    a YAML task + a success script per page. It only reports pass/fail:
+    no "me or the docs?" diagnosis, no fix, no clean re-run of a fix,
+    no PR mode, no Entire. => Newt's claim is NOT "agent follows docs in
+    a sandbox" (that exists). It is: finds which pages a PR broke, says
+    why, fixes them, proves the fix from zero, and puts it on the PR.
+    Name it in the README before a judge does.
+  - Doc Detective: deterministic doc tests you write by hand, no agent.
+
+
+------------------------------------------------------------------------
+11. HONESTY RULES
+------------------------------------------------------------------------
+- PRs to real repos only for breaks verified by a clean re-run. Small,
+  polite, one per repo, reviewed by the user before sending. Never
+  mass-file.
+- Say plainly what Newt can't do (sign-ups, phone checks, paid plans).
+- Bench numbers are from our bench; say its size.
+- Sponsors' docs: post results politely; if clean, say so.
+
+
+------------------------------------------------------------------------
+12. THE DEMO VIDEO (3 minutes max)
+------------------------------------------------------------------------
+  0:00  "Coding agents ship code faster than anyone updates the docs."
+  0:10  A coding agent (Claude Code) renames charge() in lumen-sdk and
+        opens a PR. Tests pass. README untouched.
+  0:25  The Newt Action starts. Workers fan out, sandboxes start.
+  0:40  README step 3 goes red. Worker: "me or the docs?" -> docs. Reads
+        the PR diff and the ENTIRE checkpoint: why the agent renamed it.
+        Two more pages, same cause -> coordinator merges: 1 root cause.
+  1:05  Fix commit -> fresh sandbox re-run -> green. PR comment.
+  1:20  Nightly mode: a library releases mid-run; a passed page goes
+        red, re-queued, fixed. Kill the process - it resumes.
+  1:45  neatlogs: v1 blamed the docs for its own mistake. Trace,
+        investigation, Claude Code fix, Entire checkpoint. v2 numbers.
+  2:25  "Why not a skill?" - 10 seconds + the companion skill.
+  2:35  Real PR on real docs (merged if we got one). cfo.ai price.
+  2:50  "Newt. Every doc, tried by a newcomer."
+
+
+------------------------------------------------------------------------
+13. OPEN QUESTIONS - DISCORD / KICKOFF
+------------------------------------------------------------------------
+- Can the test bench (list of public docs pages + known answers) be
+  chosen before 07:00 UTC, or only inside the window?
+- Team size / prebuilt-work FAQ answers (not readable on the page).
+- Name: "newt" is also a Linux TUI library and an old email app
+  nickname. Use "Newt - every doc, tried by a newcomer", repo newt-docs,
+  handle @newtdocs. Check GitHub/npm/X before the first post.
