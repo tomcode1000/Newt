@@ -320,7 +320,9 @@ def _explained(verdict: Verdict, fetched: dict[str, str]) -> tuple[bool, str]:
     text = fetched.get(source) or next((t for u, t in fetched.items() if u.rstrip("/") == source.rstrip("/")), None)
     if text is None:
         return False, f"cause_source {source} was not fetched in this run"
-    quote = _norm(verdict.cause_quote)
+    # Models sometimes join quoted lines with a literal backslash-n (escaped twice in their JSON);
+    # that is still the source's text, so read those escapes as the whitespace they stand for.
+    quote = _norm(re.sub(r"\\[nrt]", " ", verdict.cause_quote))
     if len(quote) < 8:
         return False, "cause_quote missing or too short to check"
     if quote not in _norm(text):

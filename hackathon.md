@@ -142,6 +142,34 @@ Entire: the Entire CLI was not on PATH during phase 1, so its 7 commits
   4 new tests (scripted model, real Docker). Full suite: 42 tests; on one run 2
   failed because the sandbox could not reach the Debian mirror / PyPI (apt
   "Failed to fetch", 157 s); both passed on the re-run - network, not code.
+- Step 5, `newt run demo/lumen-docs` against lumenpay 2.0 (gate on) - **not
+  completed: the OpenRouter free-tier daily limit was hit** ("Rate limit
+  exceeded: free-models-per-day. Add 10 credits to unlock 1000 free model
+  requests per day"). The `--no-gate` baseline run was not started, because it
+  would hit the same limit. Real results so far (ledger `runs/newt.db`):
+  - Run 1 froze: 6+ minutes, no events, no sandboxes. A py-spy dump showed all
+    4 worker threads ~990 frames deep in neatlogs' span-input serializer,
+    walking the Worker -> shared OpenRouter client (no cycle check). `newt page`
+    never hit it because there the Worker created its client inside `run()`.
+    Fixed: compact `to_dict()` on Worker/ToolBox/Coordinator/RunReport,
+    no input capture on `write_fix`; regression test fails without the fix.
+    Run 1 is recorded in the ledger as stopped, with that reason.
+  - Run 2 (Nemotron 3 Super free, 4 workers, 120 s until the limit):
+    01-quickstart and 03-bulk-charges: model said docs_broken, with the right
+    cause (charge() removed, LUMEN_API_KEY -> LUMEN_SECRET_KEY) and the right
+    fix, 13 / 14 turns, 84 s / 79 s. Gate check (a) passed for both (failed
+    again in a fresh sandbox: `AttributeError: module 'lumen' has no attribute
+    'charge'`), but check (b) failed, so both were demoted to `unsure`: the
+    quote was genuine but the model joined two changelog bullets with a
+    literal `\n`. Gate false negative; fixed (escape sequences in quotes read
+    as whitespace), regression test from the real quote. Re-checked offline
+    against the stored verdicts: both quotes now pass (b), so both pages would
+    have reached write_fix. 04-local-dev-server: error - OpenRouter returned an
+    error body (`provider_unavailable`) with HTTP 200, which the SDK rejects as
+    a ResponseValidationError; now retried like a 502. 02, 05, 06, 07, 08:
+    not_run (daily limit). No root causes grouped, no fixes written or verified.
+  - So there are no gate-vs-baseline numbers yet. Next: re-run both when the
+    daily quota resets, or with credits on the OpenRouter account.
 
 ## Demo
 
@@ -149,6 +177,8 @@ Not recorded yet.
 
 ## Known limits
 
+- Free OpenRouter models allow about 50 requests a day on an account without
+  credits; one page takes about 13-15. A full 8-page run with fixes does not fit.
 - Newt cannot complete steps that need sign-ups, phone checks, captchas or
   paid plans; these are reported as "needs a human".
 

@@ -68,6 +68,8 @@ def chat(
             return _to_reply(client.chat.send(**kwargs))
         except Exception as e:  # SDK errors carry status_code; anything else is not ours to retry
             status = getattr(e, "status_code", None)
+            if status == 200 and '"error"' in str(getattr(e, "body", "")):
+                status = 502  # an upstream error delivered in a 200 body (e.g. provider_unavailable)
             if status not in RETRY_STATUSES:
                 raise
             text = f"{e} {getattr(e, 'body', '')}"

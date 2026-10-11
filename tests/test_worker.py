@@ -236,3 +236,38 @@ def test_explained_requires_fetched_source_and_real_quote():
 def test_signature_picks_last_error_line():
     out = "Traceback (most recent call last):\n  File \"x\"\nAttributeError: module 'lumen' has no attribute 'charge'\n"
     assert _signature(out) == "attributeerror: module 'lumen' has no attribute 'charge'"
+
+
+def test_quote_joined_with_literal_backslash_n_still_counts():
+    # Run 2 on lumen v2.0: a genuine two-bullet quote, joined with a literal "\n" by the model.
+    source = ("- `lumen.charge()` has been removed. Use `lumen.payments.create()` instead. It\n"
+              "  takes the same arguments.\n"
+              "- The API key is now read from the `LUMEN_SECRET_KEY` environment variable.\n")
+    quote = ("- `lumen.charge()` has been removed. Use `lumen.payments.create()` instead. It takes the same arguments."
+             "\n- The API key is now read from the `LUMEN_SECRET_KEY` environment variable.")
+    v = Verdict("docs_broken", cause_source="https://x.test/c", cause_quote=quote)
+    assert _explained(v, {"https://x.test/c": source})[0]
+    # A quote that is not in the source still fails.
+    v.cause_quote = quote.replace("removed", "deprecated")
+    assert not _explained(v, {"https://x.test/c": source})[0]
+
+
+def test_chat_retries_an_error_delivered_in_a_200_body():
+    fake = FakeClient([[report("pass")]])
+    attempts = []
+
+    def flaky(**kw):
+        attempts.append(1)
+        if len(attempts) == 1:
+            raise RateLimited(200, "Response validation failed", {})  # body set below
+        return fake._send(**kw)
+
+    def send(**kw):
+        try:
+            return flaky(**kw)
+        except RateLimited as e:
+            e.body = '{"id": "gen-1", "error": {"code": 502, "message": "provider_unavailable"}}'
+            raise
+
+    reply = llm.chat(SimpleNamespace(chat=SimpleNamespace(send=send)), model="m", messages=[], sleep=lambda s: None)
+    assert len(attempts) == 2 and reply.tool_calls[0].name == "report"

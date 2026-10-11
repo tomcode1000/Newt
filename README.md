@@ -28,6 +28,17 @@ cp .env.example .env    # add OPENROUTER_API_KEY (and NEATLOGS_API_KEY for traci
 newt page demo/pages/notes-quickstart.md
 ```
 
+To check a whole docs folder (4 pages in parallel, failures grouped by root
+cause, each fix re-run from zero before it counts):
+
+```bash
+python demo/lumen_index.py serve --publish 1.0.0 &   # the demo world's package index
+python demo/lumen_index.py publish 2.0.0             # ship the breaking release
+newt run demo/lumen-docs --out runs/v2.json          # add --no-gate for the fix-everything baseline
+```
+
+State goes to a SQLite ledger (`runs/newt.db`); fixed pages to `runs/fixes/`.
+
 Models are called through [OpenRouter](https://openrouter.ai). Set `NEWT_MODEL`
 in `.env` to choose one; the default is the free
 `nvidia/nemotron-3-super-120b-a12b:free`. Free models have per-minute and
