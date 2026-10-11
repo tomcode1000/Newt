@@ -28,6 +28,7 @@ def cmd_page(args: argparse.Namespace) -> int:
     from rich.console import Console
 
     from newt import tracing
+    from newt.config import load_config
     from newt.llm import DailyLimitReached
     from newt.worker import Worker
 
@@ -37,11 +38,14 @@ def cmd_page(args: argparse.Namespace) -> int:
         return 2
     traced = tracing.init_tracing(workflow_name="newt-page")
     console.print(f"[bold]newt[/bold] following {args.path} with {tracing.model_name()} (tracing {'on' if traced else 'off: no NEATLOGS_API_KEY'})")
+    config = load_config(args.path)
     worker = Worker(
         args.path.read_text(encoding="utf-8"),
         page_name=args.path.name,
         gate=not args.no_gate,
         max_turns=args.max_turns,
+        sandbox_factory=config.sandbox_factory(),
+        fetcher=config.fetcher(),
         on_event=lambda msg: console.print(f"  [dim]{msg}[/dim]"),
     )
     try:

@@ -77,9 +77,11 @@ class Sandbox:
         cpus: float = 2.0,
         mem_limit: str = "2g",
         network: bool = True,
+        env: dict[str, str] | None = None,
         client: docker.DockerClient | None = None,
     ) -> None:
         self.image = image
+        self.env = dict(env or {})
         self.cpus = cpus
         self.mem_limit = mem_limit
         self.network = network
@@ -104,6 +106,7 @@ class Sandbox:
             nano_cpus=int(self.cpus * 1e9),
             mem_limit=self.mem_limit,
             network_disabled=not self.network,
+            environment=self.env,
             labels={"newt": "sandbox"},
             init=True,  # reap background processes' zombies
         )

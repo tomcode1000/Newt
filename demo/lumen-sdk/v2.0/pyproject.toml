@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lumenpay"
+version = "2.0.0"
+description = "Lumen payments SDK (Newt demo library)"
+requires-python = ">=3.10"
+
+[project.urls]
+Changelog = "http://host.docker.internal:8765/lumenpay/CHANGELOG.md"
+
+[tool.setuptools]
+packages = ["lumen"]

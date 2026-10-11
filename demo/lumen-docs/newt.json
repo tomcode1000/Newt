@@ -1,0 +1,9 @@
+{
+  "sandbox_env": {
+    "PIP_INDEX_URL": "http://host.docker.internal:8765/simple/",
+    "PIP_TRUSTED_HOST": "host.docker.internal"
+  },
+  "fetch_rewrite": {
+    "http://host.docker.internal:8765/": "http://127.0.0.1:8765/"
+  }
+}

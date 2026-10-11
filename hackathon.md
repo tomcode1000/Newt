@@ -104,6 +104,19 @@ Entire: the Entire CLI was not on PATH during phase 1, so its 7 commits
   commits now carry an `Entire-Checkpoint` trailer; (3) two string-escape typos
   of mine (a broken f-string in cli.py, a mangled path in the README), caught by
   the live run before they were committed.
+- Demo world (BUILD-PLAN section 4): `demo/lumen-sdk` v1.0 (`lumen.charge()`,
+  `LUMEN_API_KEY`) and v2.0 (`lumen.payments.create()`, `LUMEN_SECRET_KEY`,
+  changelog). Distribution name `lumenpay` because `lumen-sdk` is a real PyPI
+  project; the local index (`demo/lumen_index.py`, port 8765) redirects every
+  other project to PyPI so the real names can never shadow ours. `publish 2.0.0`
+  releases v2.0 while the index runs. 8 pages in `demo/lumen-docs`: 3 use
+  `charge()`, 1 background server (~4 s to listen), 1 SMS phone check, 1 needs
+  libxml2, 2 fine. `newt.json` per docs set: sandbox env (pip index) and a
+  fetch rewrite - on this laptop the host cannot reach `host.docker.internal`
+  (the hosts file has a stale 172.20.10.3) while containers can.
+  4 new Docker tests check the world behaves as designed (v2 breaks charge();
+  renaming alone still fails on the env var; receipts fail without libxml2 and
+  work after `apt-get install libxml2`; dev server not up at 2 s, up by 20 s).
 
 ## Demo
 
