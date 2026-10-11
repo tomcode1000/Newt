@@ -170,6 +170,22 @@ Entire: the Entire CLI was not on PATH during phase 1, so its 7 commits
     not_run (daily limit). No root causes grouped, no fixes written or verified.
   - So there are no gate-vs-baseline numbers yet. Next: re-run both when the
     daily quota resets, or with credits on the OpenRouter account.
+- Run 3 (gate on, `NEWT_MODEL=minimax/minimax-m3`, paid, 108 s): **stopped
+  short by account credit** - 4 pages (01, 03, 05, 07) failed with HTTP 402
+  "This request would exceed your available credits given your current
+  in-flight requests". Real results for the other 4:
+  - 04-local-dev-server: pass (8 turns, 46 s). 08-formatting-amounts: pass
+    (6 turns, 19 s).
+  - 02-accept-a-payment: model said docs_broken (right cause). Check (a)
+    passed (same AttributeError in a fresh sandbox), (b) failed -> unsure: the
+    quote merged two changelog bullets and dropped the "- " marker, so it is
+    not an exact excerpt. A true break held back.
+  - 06-receipts (the libxml2 trap): model said docs_broken - a false alarm.
+    (a) reproduced the missing-libxml2 error, (b) failed: the quote stitched
+    unrelated changelog lines with "...". Gate demoted it to unsure, so no
+    wrong fix was written. Loosening (b) to accept stitched fragments would
+    have let this false alarm through, so (b) stays exact.
+  - No root causes, no fixes (no page reached write_fix). Baseline not run.
 
 ## Demo
 
