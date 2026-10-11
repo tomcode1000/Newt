@@ -50,6 +50,11 @@ class RunReport:
     fixes: list[Any] = field(default_factory=list)  # FixOutcome, filled by the fix stage
     stopped: str = ""  # why the run stopped early, if it did
 
+    def to_dict(self) -> dict[str, Any]:
+        """Span-sized summary (see Coordinator.to_dict)."""
+        return {"run_id": self.run_id, "gate": self.gate, "pages": {n: r.verdict.status for n, r in self.results.items()},
+                "errors": list(self.errors), "not_run": self.not_run, "causes": len(self.causes), "stopped": self.stopped}
+
 
 GROUP_TOOL = {
     "name": "group_causes",
@@ -116,6 +121,11 @@ class Coordinator:
         self.worker_factory = worker_factory
         self._stop = threading.Event()
         self._stop_reason = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        """What a trace span records for this object. neatlogs serializes span inputs (including `self`)
+        by walking attributes; the client and sandbox behind them are deep and cyclic, so give it a summary."""
+        return {"docs": str(self.docs), "model": self.model, "gate": self.gate, "fix": self.fix, "workers": self.workers}
 
     @tracing.span(kind="CHAIN", name="newt.coordinator")
     def run(self) -> RunReport:

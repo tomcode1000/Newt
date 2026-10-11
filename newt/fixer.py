@@ -142,7 +142,7 @@ def _fix_one(coord: "Coordinator", run_id: int, report: "RunReport", cause: "Cau
     return FixOutcome(page, cause.id, state, check.verdict.status, sent, changes, str(out))
 
 
-@tracing.span(kind="AGENT", name="newt.fixer", role="docs repairer")
+@tracing.span(kind="AGENT", name="newt.fixer", role="docs repairer", capture_input=False)
 def write_fix(client: Any, model: str, original: str, cause: "Cause", result: Any) -> tuple[str, str]:
     """One model call: the whole corrected page, and a note on what changed."""
     v = result.verdict

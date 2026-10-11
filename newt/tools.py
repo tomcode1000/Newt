@@ -216,6 +216,11 @@ class ToolBox:
     fetched: dict[str, str] = field(default_factory=dict)  # url -> full text, for the gate
     _failures: dict[int, int] = field(default_factory=dict)
 
+    def to_dict(self) -> dict[str, Any]:
+        """What a trace span records for this object. neatlogs serializes span inputs (including `self`)
+        by walking attributes; the client and sandbox behind them are deep and cyclic, so give it a summary."""
+        return {"sandbox": self.sandbox.name, "actions": len(self.actions), "fetched": list(self.fetched)}
+
     def handle(self, name: str, tool_input: dict[str, Any]) -> tuple[str, bool]:
         """Run one tool call. Returns (text for the model, is_error)."""
         handler = getattr(self, f"_tool_{name}", None)

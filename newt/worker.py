@@ -153,6 +153,11 @@ class Worker:
         self.fetcher = fetcher
         self.on_event = on_event or (lambda msg: None)
 
+    def to_dict(self) -> dict[str, Any]:
+        """What a trace span records for this object. neatlogs serializes span inputs (including `self`)
+        by walking attributes; the client and sandbox behind them are deep and cyclic, so give it a summary."""
+        return {"page": self.page_name, "model": self.model, "gate": self.gate_on, "max_turns": self.max_turns}
+
     @tracing.span(kind="AGENT", name="newt.worker", role="docs follower")
     def run(self) -> WorkerResult:
         started = time.monotonic()
