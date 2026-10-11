@@ -1,4 +1,4 @@
-"""neatlogs tracing + the Anthropic client, with keys read from .env.
+"""neatlogs tracing + the OpenRouter client, with keys read from .env.
 
 Keys come from the process environment or a `.env` file (environment wins).
 If NEATLOGS_API_KEY is missing, Newt still runs; it just isn't traced.
@@ -70,16 +70,26 @@ def tracing_enabled() -> bool:
     return _tracing_on
 
 
-def anthropic_client() -> Any:
-    """An Anthropic client, wrapped by neatlogs when tracing is on."""
-    from anthropic import Anthropic
+DEFAULT_MODEL = "nvidia/nemotron-3-super-120b-a12b:free"
+
+
+def model_name() -> str:
+    """The OpenRouter model id for workers: NEWT_MODEL, else the free default."""
+    load_env()
+    return os.environ.get("NEWT_MODEL") or DEFAULT_MODEL
+
+
+def model_client() -> Any:
+    """An OpenRouter client, wrapped by neatlogs when tracing is on."""
+    from openrouter import OpenRouter
 
     load_env()
-    if not os.environ.get("ANTHROPIC_API_KEY"):
+    api_key = os.environ.get("OPENROUTER_API_KEY")
+    if not api_key:
         raise RuntimeError(
-            "ANTHROPIC_API_KEY is not set. Copy .env.example to .env and add your key."
+            "OPENROUTER_API_KEY is not set. Copy .env.example to .env and add your key."
         )
-    client = Anthropic()
+    client = OpenRouter(api_key=api_key)
     return neatlogs.wrap(client) if _tracing_on else client
 
 

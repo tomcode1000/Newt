@@ -23,12 +23,11 @@ import time
 from dataclasses import asdict, dataclass, field
 from typing import Any, Callable
 
-from newt import tracing
+from newt import llm, tracing
 from newt.sandbox import Sandbox
 from newt.tools import STATUSES, TOOL_SCHEMAS, Action, ToolBox, http_fetch, parse_tool_input
 
-WORKER_MODEL = "claude-sonnet-5-5"
-FALLBACK_BETA = "server-side-fallback-2026-07-01"
+FUNCTION_TOOLS = llm.function_tools(TOOL_SCHEMAS)
 
 SYSTEM_PROMPT = """You are Newt, a brand-new user following a product's documentation page for the first time.
 Your job is to find out whether the page works for a newcomer, exactly as written.
@@ -134,8 +133,7 @@ class Worker:
         page_name: str = "page",
         *,
         client: Any = None,
-        model: str = WORKER_MODEL,
-        effort: str = "medium",
+        model: str | None = None,
         gate: bool = True,
         max_turns: int = 60,
         max_input_tokens: int = 2_000_000,
@@ -146,8 +144,7 @@ class Worker:
         self.page_text = page_text
         self.page_name = page_name
         self.client = client
-        self.model = model
-        self.effort = effort
+        self.model = model or tracing.model_name()
         self.gate_on = gate
         self.max_turns = max_turns
         self.max_input_tokens = max_input_tokens
@@ -158,7 +155,7 @@ class Worker:
     @tracing.span(kind="AGENT", name="newt.worker", role="docs follower")
     def run(self) -> WorkerResult:
         started = time.monotonic()
-        client = self.client or tracing.anthropic_client()
+        client = self.client or tracing.model_client()
         usage = {"in": 0, "out": 0, "cache": 0}
         turns = 0
         verdict: Verdict | None = None
@@ -167,27 +164,23 @@ class Worker:
         sandbox.start()
         tools = ToolBox(sandbox, fetcher=self.fetcher)
         try:
-            messages: list[dict[str, Any]] = [{"role": "user", "content": self._first_message()}]
+            messages: list[dict[str, Any]] = [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": self._first_message()},
+            ]
             nudged = False
             while verdict is None:
                 if turns >= self.max_turns or usage["in"] >= self.max_input_tokens:
                     verdict = Verdict("agent_gave_up", summary=f"Budget reached ({turns} turns, {usage['in']} input tokens) before a verdict.")
                     break
                 turns += 1
-                response = self._call_model(client, messages)
-                u = response.usage
-                usage["in"] += (u.input_tokens or 0) + (getattr(u, "cache_read_input_tokens", 0) or 0) + (getattr(u, "cache_creation_input_tokens", 0) or 0)
-                usage["out"] += u.output_tokens or 0
-                usage["cache"] += getattr(u, "cache_read_input_tokens", 0) or 0
-                # Append content unchanged: thinking blocks must go back as they came.
-                messages.append({"role": "assistant", "content": response.content})
+                reply = self._call_model(client, messages)
+                usage["in"] += reply.input_tokens
+                usage["out"] += reply.output_tokens
+                usage["cache"] += reply.cached_tokens
+                messages.append(reply.message)
 
-                if response.stop_reason == "refusal":
-                    verdict = Verdict("agent_gave_up", summary="The model declined to continue (refusal).")
-                    break
-
-                tool_uses = [b for b in response.content if b.type == "tool_use"]
-                if not tool_uses:
+                if not reply.tool_calls:
                     if nudged:
                         verdict = Verdict("agent_gave_up", summary="The model stopped without reporting a verdict.")
                         break
@@ -195,21 +188,22 @@ class Worker:
                     messages.append({"role": "user", "content": "Continue following the page with the tools, or call `report` if you are done."})
                     continue
 
-                results = []
-                for block in tool_uses:
-                    tool_input = parse_tool_input(block.input)
-                    if block.name == "report":
-                        try:
-                            verdict = Verdict.from_report(tool_input)
-                            text, is_error = "Verdict recorded.", False
-                        except (TypeError, ValueError) as e:
-                            text, is_error = f"Invalid report: {e}. Fix it and call report again.", True
+                for call in reply.tool_calls:
+                    try:
+                        tool_input = parse_tool_input(call.arguments)
+                    except ValueError as e:
+                        text, is_error = f"Arguments were not valid JSON ({e}). Call {call.name} again with a JSON object.", True
                     else:
-                        self.on_event(f"{block.name}: {_brief(tool_input)}")
-                        text, is_error = tools.handle(block.name, tool_input)
-                    results.append({"type": "tool_result", "tool_use_id": block.id, "content": text, "is_error": is_error})
-                if verdict is None:
-                    messages.append({"role": "user", "content": results})
+                        if call.name == "report":
+                            try:
+                                verdict = Verdict.from_report(tool_input)
+                                text, is_error = "Verdict recorded.", False
+                            except (TypeError, ValueError) as e:
+                                text, is_error = f"Invalid report: {e}. Fix it and call report again.", True
+                        else:
+                            self.on_event(f"{call.name}: {_brief(tool_input)}")
+                            text, is_error = tools.handle(call.name, tool_input)
+                    messages.append({"role": "tool", "tool_call_id": call.id, "content": f"ERROR: {text}" if is_error else text})
         finally:
             sandbox.teardown()
 
@@ -226,18 +220,8 @@ class Worker:
             f"<page>\n{self.page_text}\n</page>"
         )
 
-    def _call_model(self, client: Any, messages: list[dict[str, Any]]) -> Any:
-        return client.beta.messages.create(
-            model=self.model,
-            max_tokens=16000,
-            system=SYSTEM_PROMPT,
-            tools=TOOL_SCHEMAS,
-            messages=messages,
-            cache_control={"type": "ephemeral"},
-            output_config={"effort": self.effort},
-            betas=[FALLBACK_BETA],
-            fallbacks="default",
-        )
+    def _call_model(self, client: Any, messages: list[dict[str, Any]]) -> llm.Reply:
+        return llm.chat(client, model=self.model, messages=messages, tools=FUNCTION_TOOLS, max_tokens=16000, on_event=self.on_event)
 
     # -- the docs-fault gate ----------------------------------------------
 

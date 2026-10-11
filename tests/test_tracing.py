@@ -28,8 +28,16 @@ def test_load_env_does_not_override_existing(tmp_path, monkeypatch):
     monkeypatch.delenv("NEWT_TEST_OTHER")
 
 
-def test_anthropic_client_requires_key(monkeypatch, tmp_path):
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+def test_model_client_requires_key(monkeypatch, tmp_path):
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     monkeypatch.setattr(tracing, "load_env", lambda *a, **k: {})
-    with pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY"):
-        tracing.anthropic_client()
+    with pytest.raises(RuntimeError, match="OPENROUTER_API_KEY"):
+        tracing.model_client()
+
+
+def test_model_name_defaults_to_free_nemotron(monkeypatch):
+    monkeypatch.delenv("NEWT_MODEL", raising=False)
+    monkeypatch.setattr(tracing, "load_env", lambda *a, **k: {})
+    assert tracing.model_name() == "nvidia/nemotron-3-super-120b-a12b:free"
+    monkeypatch.setenv("NEWT_MODEL", "some/other-model")
+    assert tracing.model_name() == "some/other-model"

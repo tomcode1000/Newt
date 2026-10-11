@@ -1,9 +1,11 @@
 """Worker loop + docs-fault gate, with a scripted fake model and real Docker sandboxes."""
 
+import json
 from types import SimpleNamespace
 
 import pytest
 
+from newt import llm
 from newt.sandbox import docker_available
 from newt.worker import Verdict, Worker, _explained, _signature
 
@@ -16,26 +18,30 @@ PAGE = """# Quickstart
 
 
 class FakeClient:
-    """Plays back scripted model turns. Each turn is a list of (tool name, input)."""
+    """Plays back scripted model turns (OpenRouter chat shape). Each turn is a list of (tool name, input)."""
 
     def __init__(self, turns):
         self.turns = list(turns)
         self.calls = []
-        self.beta = SimpleNamespace(messages=SimpleNamespace(create=self._create))
+        self.chat = SimpleNamespace(send=self._send)
 
-    def _create(self, **kwargs):
+    def _send(self, **kwargs):
         self.calls.append({**kwargs, "messages": list(kwargs["messages"])})  # snapshot: the list keeps growing
-        blocks = []
+        tool_calls = []
         if self.turns:
             for i, (name, tool_input) in enumerate(self.turns.pop(0)):
-                blocks.append(SimpleNamespace(type="tool_use", id=f"t{len(self.calls)}_{i}", name=name, input=tool_input))
-        else:
-            blocks.append(SimpleNamespace(type="text", text="done"))
+                args = tool_input if isinstance(tool_input, str) else json.dumps(tool_input)
+                tool_calls.append(SimpleNamespace(id=f"t{len(self.calls)}_{i}", type="function", function=SimpleNamespace(name=name, arguments=args)))
+        message = SimpleNamespace(role="assistant", content=None if tool_calls else "done", tool_calls=tool_calls or None, reasoning_details=None)
         return SimpleNamespace(
-            content=blocks,
-            stop_reason="tool_use" if blocks[0].type == "tool_use" else "end_turn",
-            usage=SimpleNamespace(input_tokens=100, output_tokens=20, cache_read_input_tokens=0, cache_creation_input_tokens=0),
+            choices=[SimpleNamespace(index=0, message=message, finish_reason="tool_calls" if tool_calls else "stop")],
+            usage=SimpleNamespace(prompt_tokens=100, completion_tokens=20, prompt_tokens_details=SimpleNamespace(cached_tokens=0)),
         )
+
+
+def tool_results(call):
+    """The tool messages sent back to the model in one recorded call."""
+    return [m for m in call["messages"] if m.get("role") == "tool"]
 
 
 def report(status, **extra):
@@ -86,8 +92,8 @@ def test_pass_run_records_actions_and_uses_one_sandbox():
     assert '{"ok": true}' in result.actions[1].output_tail
     assert result.turns == 3
     # The tool result for the run went back to the model with the output.
-    last_user = w.client.calls[-1]["messages"][-1]
-    assert '{"ok": true}' in last_user["content"][0]["content"]
+    last = w.client.calls[-1]["messages"][-1]
+    assert last["role"] == "tool" and '{"ok": true}' in last["content"]
 
 
 @docker_only
@@ -155,8 +161,8 @@ def test_invalid_report_is_returned_to_model_and_retried():
     w = make_worker(turns)
     result = w.run()
     assert result.verdict.status == "pass"
-    err = w.client.calls[1]["messages"][-1]["content"][0]
-    assert err["is_error"] and "Invalid report" in err["content"]
+    err = w.client.calls[1]["messages"][-1]
+    assert err["role"] == "tool" and err["content"].startswith("ERROR: Invalid report")
 
 
 @docker_only
@@ -171,29 +177,84 @@ def test_repeated_failures_trigger_decide_note():
     turns = [[("run", {"command": "false", "step": 1, "purpose": "retry"})]] * 3 + [[report("unsure")]]
     w = make_worker(turns)
     w.run()
-    third_result = w.client.calls[3]["messages"][-1]["content"][0]["content"]
+    third_result = w.client.calls[3]["messages"][-1]["content"]
     assert "has failed 3 times" in third_result
 
 
-def test_request_shape_for_sonnet_5_5():
+def test_request_shape_for_openrouter(monkeypatch):
+    monkeypatch.setenv("NEWT_MODEL", "nvidia/nemotron-3-super-120b-a12b:free")
     calls = []
 
     class Stop(Exception):
         pass
 
-    def create(**kw):
+    def send(**kw):
         calls.append(kw)
         raise Stop
 
-    client = SimpleNamespace(beta=SimpleNamespace(messages=SimpleNamespace(create=create)))
+    client = SimpleNamespace(chat=SimpleNamespace(send=send))
     w = Worker(PAGE, client=client, sandbox_factory=lambda: SimpleNamespace(start=lambda: None, teardown=lambda: None))
     with pytest.raises(Stop):
         w.run()
     kw = calls[0]
-    assert kw["model"] == "claude-sonnet-5-5"
-    assert "tool_choice" not in kw and "temperature" not in kw  # both rejected on this model
-    assert kw["fallbacks"] == "default" and kw["betas"] == ["server-side-fallback-2026-07-01"]
-    assert {t["name"] for t in kw["tools"]} == {"run", "write_file", "read_file", "wait_for_port", "fetch", "report"}
+    assert kw["model"] == "nvidia/nemotron-3-super-120b-a12b:free"
+    assert kw["messages"][0]["role"] == "system" and kw["messages"][1]["role"] == "user"
+    assert all(t["type"] == "function" for t in kw["tools"])
+    assert {t["function"]["name"] for t in kw["tools"]} == {"run", "write_file", "read_file", "wait_for_port", "fetch", "report"}
+
+
+@docker_only
+def test_bad_json_arguments_go_back_to_the_model():
+    turns = [[("run", "{not json")], [report("pass")]]
+    w = make_worker(turns)
+    result = w.run()
+    assert result.verdict.status == "pass"
+    err = w.client.calls[1]["messages"][-1]
+    assert err["content"].startswith("ERROR: Arguments were not valid JSON")
+
+
+class RateLimited(Exception):
+    def __init__(self, status_code, message, headers=None):
+        super().__init__(message)
+        self.status_code, self.body, self.headers = status_code, "", headers or {}
+
+
+def test_chat_backs_off_on_429_then_succeeds():
+    fake = FakeClient([[report("pass")]])
+    attempts = []
+
+    def flaky(**kw):
+        attempts.append(1)
+        if len(attempts) < 3:
+            raise RateLimited(429, "Rate limit exceeded: free-models-per-min", {"retry-after": "7"})
+        return fake._send(**kw)
+
+    waits = []
+    client = SimpleNamespace(chat=SimpleNamespace(send=flaky))
+    reply = llm.chat(client, model="m", messages=[{"role": "user", "content": "hi"}], sleep=waits.append)
+    assert waits == [7.0, 7.0]
+    assert reply.tool_calls[0].name == "report"
+
+
+def test_chat_stops_on_daily_limit():
+    def limited(**kw):
+        raise RateLimited(429, "Rate limit exceeded: free-models-per-day. Add 10 credits to unlock 1000 free model requests per day")
+
+    client = SimpleNamespace(chat=SimpleNamespace(send=limited))
+    with pytest.raises(llm.DailyLimitReached):
+        llm.chat(client, model="m", messages=[], sleep=lambda s: None)
+
+
+def test_chat_does_not_retry_client_errors():
+    calls = []
+
+    def bad(**kw):
+        calls.append(1)
+        raise RateLimited(400, "bad request")
+
+    with pytest.raises(RateLimited):
+        llm.chat(SimpleNamespace(chat=SimpleNamespace(send=bad)), model="m", messages=[], sleep=lambda s: None)
+    assert len(calls) == 1
 
 
 def test_explained_requires_fetched_source_and_real_quote():

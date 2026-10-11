@@ -17,6 +17,23 @@ and demo links will land here as they exist.
    the history explains why) does it write a fix — then re-runs the whole page
    from zero to prove the fix works.
 
+## Setup
+
+Needs Python 3.12+ and Docker.
+
+```bash
+python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -e ".[dev]"
+cp .env.example .env    # add OPENROUTER_API_KEY (and NEATLOGS_API_KEY for tracing)
+newt page demo/pages/notes-quickstart.md
+```
+
+Models are called through [OpenRouter](https://openrouter.ai). Set `NEWT_MODEL`
+in `.env` to choose one; the default is the free
+`nvidia/nemotron-3-super-120b-a12b:free`. Free models have per-minute and
+per-day request limits: Newt backs off on rate limits and stops with a clear
+message if the daily limit is used up.
+
 ## Prior art
 
 [quickstarted](https://pypi.org/project/quickstarted/) already runs an agent in

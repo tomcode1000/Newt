@@ -12,10 +12,12 @@ docs' fault, fixes the page, and proves the fix with a clean re-run.
 
 ## Stack
 
-- Python 3.12, Anthropic SDK (plain tool-use loop, no agent framework)
-- Workers: `claude-sonnet-5-5`; coordinator: `claude-opus-5-5`
+- Python 3.12, plain tool-calling loop (no agent framework)
+- Models: OpenRouter via the official `openrouter` SDK. Model from `NEWT_MODEL`,
+  default `nvidia/nemotron-3-super-120b-a12b:free` (from phase 2; phase 1 was
+  written against the Anthropic SDK and never made a live call)
 - Sandboxes: Docker, fresh `python:3.12-slim` container per page run
-- Tracing: neatlogs (`neatlogs.wrap(Anthropic())`)
+- Tracing: neatlogs (`neatlogs.wrap(OpenRouter(...))`)
 - Repo history: Entire checkpoints
 - State: SQLite ledger (planned)
 
@@ -57,8 +59,31 @@ Failures / fixes today:
   fresh sandbox too; rewritten so the agent's own diagnose command causes the
   failure, which the replay correctly skips.
 
-Not done yet: no live model run (no `.env` with `ANTHROPIC_API_KEY` yet);
-Entire CLI not on PATH, so commits so far have no Entire checkpoints.
+Not done yet: no live model run (no `.env` with `ANTHROPIC_API_KEY` yet).
+
+Entire: the Entire CLI was not on PATH during phase 1, so its 7 commits
+(9478d3a .. 46ac41e) have no Entire checkpoints. Fixed from phase 2 on:
+`entire status` shows the repo enabled for Claude Code (Entire CLI 0.11.4).
+
+### 11 Oct 2026 — phase 2
+
+- Model calls moved from Anthropic to OpenRouter (`openrouter` SDK 1.3.43,
+  chat completions with function tools), traced with
+  `neatlogs.wrap(OpenRouter(...))`. New `newt/llm.py`: one `chat()` used by
+  everything; backs off on 429 / 5xx (Retry-After or rate-limit reset header,
+  else exponential, max 90 s, 8 attempts) and stops with a clear error when the
+  free-model daily limit is hit instead of faking a run. Claude-only bits
+  removed (adaptive thinking, effort, prompt caching, refusal fallback). Worker
+  loop, Verdict and gate unchanged; 30 tests pass (3 new: 429 backoff, daily
+  limit, no retry on 400; 1 new: bad JSON tool arguments go back to the model).
+- Planned default `minimax/minimax-m3:free` does not exist: OpenRouter answered
+  404 "This model is unavailable for free. The paid version is available now".
+  Probed free tool-capable models with one tool call each:
+  `nvidia/nemotron-3-super-120b-a12b:free` (correct call, 3.9 s),
+  `nvidia/nemotron-3-ultra-550b-a55b:free` (correct, 47.6 s),
+  `poolside/laguna-s-2.1:free` (correct, 23.6 s), `thinkingmachines/inkling:free`
+  (403, agentic harnesses only), `google/gemma-4-31b-it:free` (429 upstream).
+  Default set to Nemotron 3 Super (free).
 
 ## Demo
 

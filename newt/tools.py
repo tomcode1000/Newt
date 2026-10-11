@@ -328,4 +328,7 @@ def _tail(text: str, limit: int = OUTPUT_TAIL_CHARS) -> str:
 def parse_tool_input(raw: Any) -> dict[str, Any]:
     if isinstance(raw, dict):
         return raw
-    return json.loads(raw)
+    data = json.loads(raw or "{}")
+    if not isinstance(data, dict):
+        raise ValueError(f"expected a JSON object, got {type(data).__name__}")
+    return data

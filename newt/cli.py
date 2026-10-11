@@ -28,6 +28,7 @@ def cmd_page(args: argparse.Namespace) -> int:
     from rich.console import Console
 
     from newt import tracing
+    from newt.llm import DailyLimitReached
     from newt.worker import Worker
 
     console = Console(stderr=True)
@@ -35,7 +36,7 @@ def cmd_page(args: argparse.Namespace) -> int:
         console.print(f"[red]No such file:[/red] {args.path}")
         return 2
     traced = tracing.init_tracing(workflow_name="newt-page")
-    console.print(f"[bold]newt[/bold] following {args.path} (tracing {'on' if traced else 'off: no NEATLOGS_API_KEY'})")
+    console.print(f"[bold]newt[/bold] following {args.path} with {tracing.model_name()} (tracing {'on' if traced else 'off: no NEATLOGS_API_KEY'})")
     worker = Worker(
         args.path.read_text(encoding="utf-8"),
         page_name=args.path.name,
@@ -45,6 +46,10 @@ def cmd_page(args: argparse.Namespace) -> int:
     )
     try:
         result = worker.run()
+    except DailyLimitReached as e:
+        console.print(f"[red]{e}[/red]")
+        console.print("No verdict: the run stopped before the page was checked.")
+        return 3
     finally:
         tracing.flush()
 
