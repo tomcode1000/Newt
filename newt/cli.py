@@ -21,6 +21,14 @@ def build_parser() -> argparse.ArgumentParser:
     page.add_argument("--no-gate", action="store_true", help="Fix-everything baseline: skip the docs-fault gate.")
     page.add_argument("--out", type=Path, help="Also write the full result JSON here.")
     page.add_argument("--max-turns", type=int, default=60)
+
+    run = sub.add_parser("run", help="Check every page of a docs folder in parallel, group failures by root cause.")
+    run.add_argument("docs", type=Path, help="Folder of markdown pages (optionally with newt.json).")
+    run.add_argument("--no-gate", action="store_true", help="Fix-everything baseline: skip the docs-fault gate.")
+    run.add_argument("--workers", type=int, default=4)
+    run.add_argument("--db", type=Path, default=Path("runs/newt.db"), help="SQLite ledger (default runs/newt.db).")
+    run.add_argument("--out", type=Path, help="Write a JSON summary of the run here.")
+    run.add_argument("--max-turns", type=int, default=60)
     return parser
 
 
@@ -78,6 +86,44 @@ def cmd_page(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_run(args: argparse.Namespace) -> int:
+    import json
+
+    from rich.console import Console
+
+    from newt import tracing
+    from newt.coordinator import Coordinator, run_summary
+    from newt.ledger import Ledger
+    from newt.ui import RunView
+
+    console = Console(stderr=True)
+    if not args.docs.exists():
+        console.print(f"[red]No such folder:[/red] {args.docs}")
+        return 2
+    traced = tracing.init_tracing(workflow_name="newt-run")
+    if not traced:
+        console.print("tracing off: no NEATLOGS_API_KEY")
+    ledger = Ledger(args.db)
+    coordinator = Coordinator(
+        args.docs, ledger=ledger, workers=args.workers, gate=not args.no_gate, fix=False,
+        view=RunView(console), max_turns=args.max_turns,
+    )
+    try:
+        report = coordinator.run()
+    finally:
+        tracing.flush()
+    summary = run_summary(ledger, report.run_id)
+    if args.out:
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.out.write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
+        console.print(f"summary: {args.out}")
+    console.print(f"ledger: {args.db} (run {report.run_id})")
+    if report.stopped:
+        console.print(f"[red]Run stopped early:[/red] {report.stopped}")
+        return 3
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -86,4 +132,6 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "page":
         return cmd_page(args)
+    if args.command == "run":
+        return cmd_run(args)
     return 0

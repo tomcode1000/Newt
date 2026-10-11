@@ -117,6 +117,18 @@ Entire: the Entire CLI was not on PATH during phase 1, so its 7 commits
   4 new Docker tests check the world behaves as designed (v2 breaks charge();
   renaming alone still fails on the env var; receipts fail without libxml2 and
   work after `apt-get install libxml2`; dev server not up at 2 s, up by 20 s).
+- `newt/coordinator.py` + `newt/ledger.py` + `newt/ui.py`, `newt run <docs>`:
+  pages run in parallel (4 workers by default, a thread each, fresh sandbox
+  each); every state change goes to SQLite (`runs/newt.db`: runs, pages,
+  causes, fixes, events); a rich live table shows each page's state, verdict,
+  gate action, turns, time and last action. Fix candidates (gate action
+  write_fix, or send_fix with the gate off) are grouped by root cause with one
+  model call (`group_causes` tool); if the model's grouping does not cover
+  every page exactly once, Newt groups by error signature instead (recorded as
+  method "signature"); one candidate skips the call. A crash on one page is
+  recorded and the run goes on; the daily-limit error stops the run, marks
+  unstarted pages `not_run` and the run `stopped`. 4 new tests (scripted model,
+  real Docker): grouping, the fallback, the honest stop, ledger round trip.
 
 ## Demo
 
