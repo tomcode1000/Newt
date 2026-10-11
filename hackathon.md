@@ -84,6 +84,26 @@ Entire: the Entire CLI was not on PATH during phase 1, so its 7 commits
   `poolside/laguna-s-2.1:free` (correct, 23.6 s), `thinkingmachines/inkling:free`
   (403, agentic harnesses only), `google/gemma-4-31b-it:free` (429 upstream).
   Default set to Nemotron 3 Super (free).
+- First live run (`newt page demo/pages/notes-quickstart.md`, Nemotron 3 Super
+  free, tracing on): **pass**, 15 model turns, 125,182 input / 3,007 output
+  tokens (98,384 cached), 186.4 s. The model installed curl as step 0 (setup,
+  not a docs fault), followed steps 1-5, and both curl calls returned
+  `["hello"]`. It wrote `app.py` one directory too deep at first, noticed with
+  `pwd`, and redid it (purpose "retry") - a recovered agent-side mistake. It
+  started the server with `flask ... &` rather than `background=true`; that
+  worked here.
+- `python -m neatlogs doctor --probe`: PASS (TRACE_VISIBLE, TRACE_FINALIZED,
+  hierarchy, attributes, tokens). The doctor reads `NEATLOGS_API_KEY` only from
+  the environment, not `.env`, so it reported CREDENTIAL_MISSING until the key
+  was exported. Listing Newt's own run trace needs `neatlogs-cli` + a browser
+  device login; not done yet.
+- Broke and fixed on the way: (1) the planned free MiniMax model id (above);
+  (2) Entire's prepare-commit-msg hook hung forever on a non-interactive commit
+  - it was waiting at the "Link this commit to session context?" prompt on the
+  console. Fixed with `"commit_linking": "always"` in `.entire/settings.json`;
+  commits now carry an `Entire-Checkpoint` trailer; (3) two string-escape typos
+  of mine (a broken f-string in cli.py, a mangled path in the README), caught by
+  the live run before they were committed.
 
 ## Demo
 
