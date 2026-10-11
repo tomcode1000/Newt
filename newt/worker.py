@@ -7,7 +7,7 @@ then goes through the DOCS-FAULT GATE, which trusts evidence, not the model:
   b. explained:  the cited source was actually fetched in this run and
                  contains the quoted text that shows the cause
   c. fixed:      the corrected page passes a full re-run from zero
-                 (needs the fixer/verifier - not built yet, so c is pending)
+                 (newt/fixer.py, after the run; `newt page` alone leaves c pending)
 
   a + b -> write the fix;  a + b + c -> send it;  missing a or b -> UNSURE.
 
@@ -74,7 +74,7 @@ List installed packages with versions in `packages` (e.g. from `pip list`) when 
 class GateDecision:
     reproduced: bool | None = None
     explained: bool | None = None
-    fixed: bool | None = None  # needs the verifier; None until it exists
+    fixed: bool | None = None  # set by the verifier (newt/fixer.py); None until a fix is re-run
     action: str = "none"  # none | flag | write_fix | send_fix
     reasons: list[str] = field(default_factory=list)
     repro_output_tail: str = ""
@@ -116,6 +116,7 @@ class WorkerResult:
     cache_read_tokens: int
     duration_s: float
     model: str
+    cause_source_text: str = ""  # what the cited source said, for the fixer (capped)
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
@@ -212,6 +213,7 @@ class Worker:
             page=self.page_name, verdict=verdict, gate=gate, actions=tools.actions, turns=turns,
             input_tokens=usage["in"], output_tokens=usage["out"], cache_read_tokens=usage["cache"],
             duration_s=round(time.monotonic() - started, 1), model=self.model,
+            cause_source_text=_source_text(verdict, tools.fetched),
         )
 
     def _first_message(self) -> str:
@@ -237,7 +239,7 @@ class Worker:
         decision.reasons.append(f"reproduces: {why}")
         decision.explained, why = _explained(verdict, tools.fetched)
         decision.reasons.append(f"explained: {why}")
-        decision.reasons.append("fixed: pending (verifier not built yet)")
+        decision.reasons.append("fixed: pending (a fix must pass a re-run from zero)")
 
         if decision.reproduced and decision.explained:
             decision.action = "write_fix"
@@ -296,6 +298,14 @@ def _replay(sandbox: Sandbox, action: Action) -> Action:
         up = sandbox.wait_for_port(action.input["port"], timeout=action.input.get("timeout", 30))
         return Action("wait_for_port", action.input, action.step, action.purpose, ok=up, exit_code=0 if up else 1)
     raise ValueError(f"cannot replay {action.kind}")
+
+
+def _source_text(verdict: Verdict, fetched: dict[str, str], limit: int = 20_000) -> str:
+    source = verdict.cause_source.strip()
+    if not source:
+        return ""
+    text = fetched.get(source) or next((t for u, t in fetched.items() if u.rstrip("/") == source.rstrip("/")), "")
+    return text[:limit]
 
 
 def _explained(verdict: Verdict, fetched: dict[str, str]) -> tuple[bool, str]:

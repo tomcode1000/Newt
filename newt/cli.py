@@ -25,6 +25,7 @@ def build_parser() -> argparse.ArgumentParser:
     run = sub.add_parser("run", help="Check every page of a docs folder in parallel, group failures by root cause.")
     run.add_argument("docs", type=Path, help="Folder of markdown pages (optionally with newt.json).")
     run.add_argument("--no-gate", action="store_true", help="Fix-everything baseline: skip the docs-fault gate.")
+    run.add_argument("--no-fix", action="store_true", help="Only check and group; do not write or verify fixes.")
     run.add_argument("--workers", type=int, default=4)
     run.add_argument("--db", type=Path, default=Path("runs/newt.db"), help="SQLite ledger (default runs/newt.db).")
     run.add_argument("--out", type=Path, help="Write a JSON summary of the run here.")
@@ -105,7 +106,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         console.print("tracing off: no NEATLOGS_API_KEY")
     ledger = Ledger(args.db)
     coordinator = Coordinator(
-        args.docs, ledger=ledger, workers=args.workers, gate=not args.no_gate, fix=False,
+        args.docs, ledger=ledger, workers=args.workers, gate=not args.no_gate, fix=not args.no_fix,
         view=RunView(console), max_turns=args.max_turns,
     )
     try:
@@ -117,6 +118,18 @@ def cmd_run(args: argparse.Namespace) -> int:
         args.out.parent.mkdir(parents=True, exist_ok=True)
         args.out.write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
         console.print(f"summary: {args.out}")
+    statuses: dict[str, int] = {}
+    for page in summary["pages"]:
+        key = page["status"] or page["state"]
+        statuses[key] = statuses.get(key, 0) + 1
+    console.print("pages: " + ", ".join(f"{k} {v}" for k, v in sorted(statuses.items())))
+    console.print(f"root causes: {len(summary['causes'])}")
+    fixes = summary["fixes"]
+    if fixes:
+        verified = sum(f["state"] == "verified" for f in fixes)
+        sent = sum(bool(f["sent"]) for f in fixes)
+        console.print(f"fixes: {len(fixes)} written, {verified} verified by a re-run from zero, {sent} sent")
+        console.print(f"fixed pages: runs/fixes/run-{report.run_id}/")
     console.print(f"ledger: {args.db} (run {report.run_id})")
     if report.stopped:
         console.print(f"[red]Run stopped early:[/red] {report.stopped}")

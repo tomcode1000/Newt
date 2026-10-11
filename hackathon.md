@@ -129,6 +129,19 @@ Entire: the Entire CLI was not on PATH during phase 1, so its 7 commits
   recorded and the run goes on; the daily-limit error stops the run, marks
   unstarted pages `not_run` and the run `stopped`. 4 new tests (scripted model,
   real Docker): grouping, the fallback, the honest stop, ledger round trip.
+- `newt/fixer.py` (fixer + verifier, gate check c): for each root cause, one
+  model call per page returns the whole corrected page (`write_page` tool),
+  given the page, the failure evidence and the text of the source the worker
+  cited (kept on the result for this). The fixed page goes to
+  `runs/fixes/run-<id>/` (the docs folder is not touched), then a fresh worker
+  follows it from zero in a fresh sandbox. Gate on: only a fix whose re-run
+  passes is sent (`send_fix`); a failed re-run stays `write_fix`, unsent.
+  Gate off (baseline): every fix is sent, and the re-run is still recorded so
+  the baseline's wrong fixes can be counted. An empty/unchanged page from the
+  fixer gets one retry, then is recorded as an error, never as a fix.
+  4 new tests (scripted model, real Docker). Full suite: 42 tests; on one run 2
+  failed because the sandbox could not reach the Debian mirror / PyPI (apt
+  "Failed to fetch", 157 s); both passed on the re-run - network, not code.
 
 ## Demo
 
