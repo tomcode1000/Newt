@@ -1,0 +1,39 @@
+<pasted_content id="fbf6">
+Phase 1 is done (see hackathon.md). Note in hackathon.md that Entire wasn't on PATH for phase 1, so its 7 commits have no checkpoints; it is fixed from here on.
+
+Phase 2:
+0. Switch model calls from Anthropic to OpenRouter. Read OPENROUTER_API_KEY and NEWT_MODEL from .env (default minimax/minimax-m3:free). Use the official `openrouter` package with tool calling, traced via neatlogs.wrap(OpenRouter(...)) (neatlogs ships an OpenRouter wrapper). Remove the Claude-only bits (adaptive thinking, prompt caching, refusal fallback). Keep the worker loop, Verdict and gate unchanged, keep tests passing, and update the README and hackathon.md with the model used.
+1. Live check: run `newt page demo/pages/notes-quickstart.md` with the real model and neatlogs tracing. Confirm the trace appears (`python -m neatlogs doctor --probe`). Fix whatever breaks.
+2. Demo world (BUILD-PLAN section 4): lumen-sdk v1.0 (lumen.charge()) and v2.0 (lumen.payments.create(), renamed env var), a local package index, and lumen-docs pages: 3 using charge(), 1 background server, 1 needing a phone check, 1 needing a system lib, 2 fine.
+3. coordinator.py + ledger.py (SQLite) + ui.py (rich live table): 4 parallel workers, then group failures by root cause.
+4. fixer.py + verifier: rewrite pages for each cause and re-run each fixed page from zero in a fresh sandbox. Only verified fixes count; this is check (c) of the gate.
+5. `newt run demo/lumen-docs` end to end against v2.0, then `--no-gate` on the same pages. Record the real results in hackathon.md.
+
+Free-model rate limits: if OpenRouter returns 429, back off and retry, and tell me if the daily limit is hit instead of faking a run.
+
+Same rules: commit after each step, no Co-Authored-By lines, no pushing or posting, no invented numbers. Report at the end.
+</pasted_content id="fbf6">
+
+---
+
+Answering your earlier question "Your message was only a pasted block (the Phase 2 plan). Should I carry out that plan as written, including committing after each step with no Co-Authored-By lines?": Yes, run Phase 2 as written
+
+---
+
+<task-notification>
+<task-id>b7jyju4co</task-id>
+<tool-use-id>toolu_01TGSP9dMTBZekgLh9sQpKKr</tool-use-id>
+<output-file>C:\Users\TOLEEX~1\AppData\Local\Temp\claude\c--Users-Toleexxzy-OneDrive-Documents-coding-projects-newt\8b10677b-8b1c-490d-99e2-1d6021756f6b\tasks\b7jyju4co.output</output-file>
+<status>completed</status>
+<summary>Background command "Run live newt page on the notes quickstart" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>brd17kn7j</task-id>
+<tool-use-id>toolu_017Ufh2Jp16M6G8R1cDN6Ywh</tool-use-id>
+<output-file>C:\Users\TOLEEX~1\AppData\Local\Temp\claude\c--Users-Toleexxzy-OneDrive-Documents-coding-projects-newt\8b10677b-8b1c-490d-99e2-1d6021756f6b\tasks\brd17kn7j.output</output-file>
+<status>failed</status>
+<summary>Background command "Commit step 0" failed with exit code 143</summary>
+</task-notification>
