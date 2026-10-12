@@ -119,7 +119,7 @@ From [hackathon.md](hackathon.md), all found in real runs:
   https://entire.io/gh/tomcode1000/Newt/commit/15f3f8675ab039bedfa361d1ab6cb374ddf9ce2a
   Honest note: the first 7 commits (10 Oct) have no checkpoints — the Entire
   CLI wasn't on PATH for that session.
-- **cfo.ai** — business plan: link added when published.
+- **cfo.ai** — business plan made with cfo.ai (pricing, cost per customer, 12-month forecast, inputs): [docs/newt-business-plan.xlsx](docs/newt-business-plan.xlsx). Revenue figures are a forecast, not customers.
 
 ## Run it
 
