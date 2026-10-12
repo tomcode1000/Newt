@@ -33,6 +33,7 @@ _SKIP_VARS = "PWD|OLDPWD|SHLVL|_|HOSTNAME"
 _PRELUDE = f"""mkdir -p {_STATE_DIR}
 cd "$(cat {_CWD_FILE} 2>/dev/null || echo {WORKDIR})" 2>/dev/null || cd {WORKDIR}
 [ -f {_ENV_FILE} ] && . {_ENV_FILE} 2>/dev/null
+set -o pipefail  # `cmd | tail` must fail when cmd fails, or a broken step looks like a pass
 """
 _EPILOGUE = f"""
 __newt_rc=$?

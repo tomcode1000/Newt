@@ -105,3 +105,10 @@ def test_teardown_removes_container():
     with pytest.raises(docker.errors.NotFound):
         client.containers.get(name)
     sb.teardown()  # idempotent
+
+
+def test_failing_command_piped_into_tail_still_fails():
+    # Run 4 (DeepSeek): `python first_charge.py 2>&1 | tail -40` hid an AttributeError behind tail's exit 0.
+    with Sandbox() as sb:
+        r = sb.exec("python -c 'raise SystemExit(3)' 2>&1 | tail -5")
+        assert not r.ok
