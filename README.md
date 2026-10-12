@@ -119,7 +119,7 @@ From [hackathon.md](hackathon.md), all found in real runs:
   https://entire.io/gh/tomcode1000/Newt/commit/15f3f8675ab039bedfa361d1ab6cb374ddf9ce2a
   Honest note: the first 7 commits (10 Oct) have no checkpoints — the Entire
   CLI wasn't on PATH for that session.
-- **cfo.ai** — business plan: see below (link added when published).
+- **cfo.ai** — business plan (pricing, costs, revenue, runway): https://app.cfo.ai/real-landing-68149de7/chat/cfaa72c4-fe11-486c-9b51-89a2a574aa6f
 
 ## Run it
 
