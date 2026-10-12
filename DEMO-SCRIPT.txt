@@ -1,0 +1,158 @@
+NEWT - DEMO VIDEO SCRIPT (neatHack, 3:00 max)
+==============================================
+For: whoever records and edits the video (a person, or a model helping them).
+Target length: 2:45. Hard limit 3:00. 1920x1080. English voiceover.
+Do NOT name the builder in the video. Do NOT show .env or any API key.
+Every number in this video comes from runs/ds-nogate.json (run 5) and
+runs/ds-gate2.json (run 6), model deepseek-flash, 8 pages, one run each.
+Do not add, round up or invent any other number.
+
+
+------------------------------------------------------------------------
+A. WHAT THE VIDEO MUST PROVE (judges' checklist)
+------------------------------------------------------------------------
+1. It is a real agent: plans, runs steps, reads errors, decides whose fault.
+2. It recovers: a failed action and what it did next.
+3. It checks itself: a fix only counts after a re-run from zero.
+4. neatlogs, Entire and cfo.ai are each used, on screen.
+5. A number: fix-everything baseline vs Newt, same 8 pages.
+
+
+------------------------------------------------------------------------
+B. RECORD THESE CLIPS FIRST (raw footage, any length, sped up later)
+------------------------------------------------------------------------
+Recorder: Windows Game Bar (Win+Alt+R records the active window) or OBS.
+Terminal: Windows Terminal, font size 18+, dark theme, window maximised.
+Before recording: close other tabs, clear the terminal (cls).
+
+CLIP 1 - the docs page (10 s)
+  Open demo/lumen-docs/01-quickstart.md in VS Code, scroll to step 3
+  showing `lumen.charge(...)`. Then open demo/lumen-sdk and the v2.0
+  CHANGELOG showing charge() -> payments.create() and
+  LUMEN_API_KEY -> LUMEN_SECRET_KEY.
+
+CLIP 2 - the live run (record the whole thing, ~2-3 min real time)
+  In the newt folder:
+    .venv\Scripts\activate
+    python demo/lumen_index.py serve --publish 1.0.0      (separate tab)
+    python demo/lumen_index.py publish 2.0.0
+    newt run demo/lumen-docs --out runs/demo-take.json
+  Record the rich live table filling in: pages running in parallel,
+  "gate:" events, root cause grouping, fixes verified.
+  NOTE: a live run calls the model and may give slightly different
+  results from run 6. If it differs, use the run-6 numbers ONLY when
+  showing the run-6 files, and never mix the two on screen. If the live
+  run fails (quota, network), use runs/ds-gate2.log instead (CLIP 2b).
+
+CLIP 2b - fallback: show runs/ds-gate2.log scrolling, ending on:
+    pages: docs_broken 2, pass 4, unsure 2
+    root causes: 1
+    fixes: 2 written, 2 verified by a re-run from zero, 2 sent
+
+CLIP 3 - the gate catching a bad fix (15 s)
+  Open runs/ds-nogate.json and runs/ds-gate2.json side by side, or the
+  terminal summary of each. Show page 05-go-live: baseline sent a fix,
+  its re-run from zero FAILED (the page needs a phone check - no docs
+  edit can fix that). Newt marked it unsure and sent nothing.
+
+CLIP 4 - the verified fix (10 s)
+  VS Code diff: demo/lumen-docs/01-quickstart.md vs
+  runs/fixes/run-6/01-quickstart.md. Highlight charge() ->
+  payments.create() and LUMEN_API_KEY -> LUMEN_SECRET_KEY.
+
+CLIP 5 - neatlogs (20 s)
+  app.neatlogs.com: open a Newt trace, expand a worker run, show the
+  "docs_fault_gate" span with its decision. Then show the trace of the
+  run that froze (run 1) or the investigation that found the bug.
+
+CLIP 6 - Entire (10 s)
+  Terminal: `entire checkpoint list`. Then entire.io page for
+  github.com/tomcode1000/Newt showing a checkpoint (prompt + session
+  behind a commit).
+
+CLIP 7 - cfo.ai (8 s)
+  The Newt business plan on cfo.ai: price, cost per page, runway.
+  (Only if the plan exists by recording time - otherwise skip and cut
+  that line from the voiceover.)
+
+CLIP 8 - repo (5 s)
+  github.com/tomcode1000/Newt README, results table visible.
+
+
+------------------------------------------------------------------------
+C. THE CUT (timing, picture, voiceover)
+------------------------------------------------------------------------
+Voiceover pace: ~150 words/min. Words below: ~370.
+
+0:00-0:12  PICTURE: black title card: "Newt - every doc, tried by a
+           newcomer." then CLIP 1 (the old docs page).
+           VO: "Coding agents rename a function, the tests pass, the PR
+           merges. And the quickstart still uses the old name. The next
+           developer who tries it doesn't file a bug. They just leave."
+
+0:12-0:30  PICTURE: CLIP 1 continued - the v2.0 changelog.
+           VO: "Here's a payments SDK. Version 2 renamed charge() and the
+           API key variable. Eight docs pages were written for version 1.
+           Nobody re-ran them. Newt does."
+
+0:30-1:05  PICTURE: CLIP 2 (or 2b), sped up 4-8x, with a caption
+           "4 workers, each in a fresh Docker sandbox".
+           VO: "Newt reads each page like a newcomer, and runs every step
+           exactly as written, in a fresh Docker container, four pages at
+           a time. When a step fails, it doesn't assume the docs are wrong.
+           It asks whose fault it is. Mine? A network glitch? Something
+           only a person can do, like a phone check? Or the docs?"
+
+1:05-1:35  PICTURE: caption card with the three checks, then CLIP 2's
+           "gate:" lines highlighted.
+             a. fails the same way on a fresh machine
+             b. the changelog or diff explains why
+             c. the fixed page passes, re-run from zero
+           VO: "And it doesn't take the model's word for it. A docs fix is
+           only written if the failure happens again on a fresh machine,
+           and the changelog shows why. And it's only sent if the fixed
+           page passes a full re-run from zero."
+
+1:35-1:55  PICTURE: CLIP 4 (the verified diff).
+           VO: "Two pages broke on the same rename. Newt grouped them as
+           one root cause, rewrote them, and proved both fixes on a clean
+           machine."
+
+1:55-2:15  PICTURE: CLIP 3 + results table on screen:
+             Fix-everything baseline:  4 fixes sent, 1 failed its re-run
+             Newt:                     2 fixes sent, both passed
+           VO: "We ran the same eight pages with the checks turned off.
+           That version sent four fixes - one of them for a page that needs
+           a phone check, so the fix didn't work. Newt sent two, and both
+           work. It also held back one real break it couldn't prove, and
+           flagged it for a person. Maintainers don't want AI fixes they
+           can't trust."
+
+2:15-2:35  PICTURE: CLIP 5 (neatlogs), then CLIP 6 (Entire).
+           VO: "Every run and every gate decision is traced in neatlogs.
+           That's how we found a bug where a failed command piped into
+           tail looked like a success - and fixed it. Every commit is
+           checkpointed with Entire."
+
+2:35-2:45  PICTURE: CLIP 7 (cfo.ai) if it exists, then CLIP 8 (repo).
+           VO: "Priced per repo for devrel teams, planned on cfo.ai.
+           Newt. Every doc, tried by a newcomer."
+           (Drop the cfo.ai sentence if CLIP 7 was skipped.)
+
+2:45       End card: "Newt" / github.com/tomcode1000/Newt / #neatHack
+
+
+------------------------------------------------------------------------
+D. EDITING NOTES
+------------------------------------------------------------------------
+- Editor: Clipchamp (built into Windows) is enough. Speed up CLIP 2 with
+  the speed tool; never cut the moment a page goes red or a gate line.
+- Captions on screen for every number, so it reads with sound off.
+- Voiceover: record with the Windows Voice Recorder or Clipchamp's
+  recorder; or Clipchamp text-to-speech if no quiet room.
+- Export 1080p MP4, under 3:00. Upload to YouTube (unlisted is fine) or
+  X directly; the link goes in the 13:30 UTC quote-post.
+- Honesty: say "one run each, 8 pages". Do not say "always" or quote a
+  percentage. The baseline's extra fix is "a fix that failed its
+  re-run", not "a wrong rename" - the rename itself matches v2.0; the
+  page's real blocker is a phone check.
