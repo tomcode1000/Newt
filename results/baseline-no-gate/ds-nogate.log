@@ -1,0 +1,39 @@
+newt run demo\lumen-docs - deepseek-flash - gate OFF (fix-everything baseline) 
++-----------------------------------------------------------------------------+
+| page                     | state | verdict    | gate     | turns | time | … |
+|--------------------------+-------+------------+----------+-------+------+---|
+| 01-quickstart.md         | done  | docs_brok… | send_fix |     9 |  33s | … |
+| 02-accept-a-payment.md   | done  | docs_brok… | send_fix |     8 |  28s | … |
+| 03-bulk-charges.md       | done  | docs_brok… | send_fix |     8 |  31s | … |
+| 04-local-dev-server.md   | done  | pass       | none     |     7 |  26s | … |
+| 05-go-live.md            | done  | docs_brok… | send_fix |     8 |  54s | … |
+| 06-receipts.md           | done  | pass       | none     |     8 |  38s | … |
+| 07-install.md            | done  | pass       | none     |     6 |  30s | … |
+| 08-formatting-amounts.md | done  | pass       | none     |     6 |  19s | … |
++-----------------------------------------------------------------------------+
+root causes                                                                    
++-----------------------------------------------------------------------------+
+| # | cause                                          | pages                  |
+|---+------------------------------------------------+------------------------|
+| 1 | All four pages target the lumenpay 1.x API,    | 01-quickstart.md,      |
+|   | but the unqualified `pip install lumenpay` now | 02-accept-a-payment.m… |
+|   | resolves to 2.0.0, whose documented breaking   | 03-bulk-charges.md,    |
+|   | changes removed `lumen.charge()` (replaced by  | 05-go-live.md          |
+|   | `lumen.payments.create()`) and stopped reading |                        |
+|   | `LUMEN_API_KEY` in favour of                   |                        |
+|   | `LUMEN_SECRET_KEY`.                            |                        |
++-----------------------------------------------------------------------------+
+fixes (re-run from zero in a fresh sandbox)                                    
++-----------------------------------------------------------------------------+
+| page                   | cause | state    | note                            |
+|------------------------+-------+----------+---------------------------------|
+| 01-quickstart.md       |     1 | verified | re-run: pass - sent             |
+| 02-accept-a-payment.md |     1 | verified | re-run: pass - sent             |
+| 03-bulk-charges.md     |     1 | verified | re-run: pass - sent             |
+| 05-go-live.md          |     1 | failed   | re-run: needs_human - sent      |
++-----------------------------------------------------------------------------+summary: runs\ds-nogate.json
+pages: docs_broken 4, pass 4
+root causes: 1
+fixes: 4 written, 3 verified by a re-run from zero, 4 sent
+fixed pages: runs/fixes/run-5/
+ledger: runs\newt.db (run 5)

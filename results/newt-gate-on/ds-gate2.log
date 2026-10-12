@@ -1,0 +1,36 @@
+newt run demo\lumen-docs - deepseek-flash - gate ON                            
++-----------------------------------------------------------------------------+
+| page                     | state | verdict   | gate      | turns | time | … |
+|--------------------------+-------+-----------+-----------+-------+------+---|
+| 01-quickstart.md         | done  | docs_bro… | write_fix |     8 |  29s | … |
+| 02-accept-a-payment.md   | done  | unsure    | flag      |     7 |  34s | … |
+| 03-bulk-charges.md       | done  | docs_bro… | write_fix |     8 |  43s | … |
+| 04-local-dev-server.md   | done  | pass      | none      |     8 |  26s | … |
+| 05-go-live.md            | done  | unsure    | flag      |     9 |  64s | … |
+| 06-receipts.md           | done  | pass      | none      |     8 |  52s | … |
+| 07-install.md            | done  | pass      | none      |     7 |  24s | … |
+| 08-formatting-amounts.md | done  | pass      | none      |     6 |  28s | … |
++-----------------------------------------------------------------------------+
+root causes                                                                    
++-----------------------------------------------------------------------------+
+| # | cause                                          | pages                  |
+|---+------------------------------------------------+------------------------|
+| 1 | lumenpay 2.0.0 removed `lumen.charge()`        | 01-quickstart.md,      |
+|   | (replaced by `lumen.payments.create()`) and    | 03-bulk-charges.md     |
+|   | switched the env var from `LUMEN_API_KEY` to   |                        |
+|   | `LUMEN_SECRET_KEY`, so both pages' 1.0.0-era   |                        |
+|   | examples fail with `module 'lumen' has no      |                        |
+|   | attribute 'charge'`.                           |                        |
++-----------------------------------------------------------------------------+
+fixes (re-run from zero in a fresh sandbox)                                    
++-----------------------------------------------------------------------------+
+| page               | cause | state    | note                                |
+|--------------------+-------+----------+-------------------------------------|
+| 01-quickstart.md   |     1 | verified | re-run: pass - sent                 |
+| 03-bulk-charges.md |     1 | verified | re-run: pass - sent                 |
++-----------------------------------------------------------------------------+summary: runs\ds-gate2.json
+pages: docs_broken 2, pass 4, unsure 2
+root causes: 1
+fixes: 2 written, 2 verified by a re-run from zero, 2 sent
+fixed pages: runs/fixes/run-6/
+ledger: runs\newt.db (run 6)
