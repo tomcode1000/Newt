@@ -9,3 +9,4 @@ build/
 dist/
 runs/
 demo/index/
+.claude/
