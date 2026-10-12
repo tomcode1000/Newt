@@ -43,7 +43,8 @@ Models are called through [OpenRouter](https://openrouter.ai). Set `NEWT_MODEL`
 in `.env` to choose one; the default is the free
 `nvidia/nemotron-3-super-120b-a12b:free`. Free models have per-minute and
 per-day request limits: Newt backs off on rate limits and stops with a clear
-message if the daily limit is used up.
+message if the daily limit is used up. For DeepSeek's own API, set
+`NEWT_MODEL=deepseek-flash` and `DEEPSEEK_API_KEY` (the results below used it).
 
 ## First result
 
