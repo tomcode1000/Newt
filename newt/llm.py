@@ -103,8 +103,8 @@ def _wait_seconds(error: Any, attempt: int) -> float:
 
 
 def _to_reply(result: Any) -> Reply:
-    choice = result.choices[0]
-    msg = choice.message
+    choice = _get(result, "choices")[0]
+    msg = _get(choice, "message")
     content = _get(msg, "content")
     text = content if isinstance(content, str) else ("".join(_get(p, "text") or "" for p in content) if content else "")
     calls = [
@@ -117,6 +117,8 @@ def _to_reply(result: Any) -> Reply:
             {"id": c.id, "type": "function", "function": {"name": c.name, "arguments": c.arguments}} for c in calls
         ]
     # Reasoning models want their reasoning passed back unchanged on the next turn.
+    if _get(msg, "reasoning_content"):  # DeepSeek's form of the same
+        message["reasoning_content"] = _get(msg, "reasoning_content")
     details = _get(msg, "reasoning_details")
     if details:
         message["reasoning_details"] = [_plain(d) for d in details]
@@ -150,3 +152,39 @@ def _plain(obj: Any) -> Any:
     if isinstance(obj, (dict, list, str, int, float, bool)) or obj is None:
         return obj
     return json.loads(json.dumps(obj, default=str))
+
+
+class HTTPError(RuntimeError):
+    """A non-2xx answer from an OpenAI-compatible API; carries what chat() needs to decide on a retry."""
+
+    def __init__(self, status_code: int, body: str, headers: Any) -> None:
+        super().__init__(f"HTTP {status_code}: {body[:300]}")
+        self.status_code, self.body, self.headers = status_code, body, headers
+
+
+class OpenAICompatClient:
+    """Minimal client for OpenAI-compatible chat APIs (DeepSeek), with the same `chat.send(**kw)`
+    shape as the OpenRouter SDK so the rest of Newt does not change. Replies are plain dicts."""
+
+    def __init__(self, base_url: str, api_key: str, timeout: float = 300) -> None:
+        import httpx
+        from types import SimpleNamespace
+
+        self._http = httpx.Client(base_url=base_url, timeout=timeout, headers={"Authorization": f"Bearer {api_key}"})
+        self.base_url = base_url
+        self.chat = SimpleNamespace(send=self._send)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"base_url": self.base_url}
+
+    def _send(self, **kwargs: Any) -> dict[str, Any]:
+        from newt import tracing
+
+        @tracing.span(kind="CHAIN", name=f"deepseek chat {kwargs.get('model')}")
+        def call(model: str, messages: list[dict[str, Any]]) -> dict[str, Any]:
+            r = self._http.post("/chat/completions", json=kwargs)
+            if r.status_code >= 300:
+                raise HTTPError(r.status_code, r.text, r.headers)
+            return r.json()
+
+        return call(kwargs.get("model"), kwargs.get("messages"))

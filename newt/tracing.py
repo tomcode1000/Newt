@@ -79,11 +79,21 @@ def model_name() -> str:
     return os.environ.get("NEWT_MODEL") or DEFAULT_MODEL
 
 
-def model_client() -> Any:
-    """An OpenRouter client, wrapped by neatlogs when tracing is on."""
+def model_client(model: str | None = None) -> Any:
+    """The client for `model` (default NEWT_MODEL): DeepSeek's API for deepseek-* ids, else OpenRouter.
+    OpenRouter clients are wrapped by neatlogs when tracing is on; DeepSeek calls are traced as CHAIN spans."""
+    load_env()
+    model = model or model_name()
+    if model.startswith("deepseek"):
+        from newt.llm import OpenAICompatClient
+
+        key = os.environ.get("DEEPSEEK_API_KEY")
+        if not key:
+            raise RuntimeError("DEEPSEEK_API_KEY is not set. Add it to .env.")
+        return OpenAICompatClient("https://api.deepseek.com", key)
+
     from openrouter import OpenRouter
 
-    load_env()
     api_key = os.environ.get("OPENROUTER_API_KEY")
     if not api_key:
         raise RuntimeError(
