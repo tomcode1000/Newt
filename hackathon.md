@@ -187,6 +187,36 @@ Entire: the Entire CLI was not on PATH during phase 1, so its 7 commits
     have let this false alarm through, so (b) stays exact.
   - No root causes, no fixes (no page reached write_fix). Baseline not run.
 
+
+### 12 Oct 2026 — step 5 completed on DeepSeek
+
+- Added DeepSeek's own API as a provider (`NEWT_MODEL=deepseek-flash`, key
+  `DEEPSEEK_API_KEY`): a small OpenAI-compatible httpx client with the same
+  `chat.send` shape, so the worker, gate and fixer are unchanged.
+- Run 4 (gate on): all 4 docs_broken verdicts demoted to unsure with "no
+  failed follow/retry action recorded". Cause: the model ran
+  `python first_charge.py 2>&1 | tail -40`; the pipe's exit code was tail's 0,
+  so the failing step was logged as a success and the gate had nothing to
+  replay. Fixed: sandbox commands run with `set -o pipefail` (+ test).
+- Run 5 (`--no-gate`, fix-everything baseline, 133 s): 8/8 pages ran. 01, 02,
+  03, 05 docs_broken -> one root cause (model grouping) -> 4 fixes written and
+  **sent**. Re-runs from zero: 01, 02, 03 pass (real migration: `payments.create`
+  + `LUMEN_SECRET_KEY`); **05-go-live fails its re-run (needs_human)** - the
+  page only calls `format_amount`, so renaming its env var was a wrong fix the
+  baseline sent anyway. 04, 06, 07, 08 pass.
+- Run 6 (gate on, after the pipefail fix, 131 s): 8/8 pages ran. 01 and 03:
+  docs_broken, gate a + b passed, grouped as one cause, fixes written,
+  **both passed a re-run from zero -> sent**. 05-go-live: model said
+  docs_broken, gate demoted it to unsure (failure did not reproduce as a
+  recorded failed step) -> **no wrong fix sent**. 02-accept-a-payment: a real
+  break, also demoted to unsure for the same reason (the failed command was
+  logged under a different step number than the one cited) -> missed, flagged
+  for a person. 04, 06 (libxml2 - worker installed it itself), 07, 08: pass.
+- Headline (same 8 pages, lumenpay 2.0, deepseek-flash): **fix-everything
+  baseline sent 4 fixes, 1 wrong. Newt sent 2 fixes, 0 wrong, both verified
+  by a re-run from zero; 1 real break held back for a person.** One run each;
+  not a rate.
+
 ## Demo
 
 Not recorded yet.

@@ -45,6 +45,19 @@ in `.env` to choose one; the default is the free
 per-day request limits: Newt backs off on rate limits and stops with a clear
 message if the daily limit is used up.
 
+## First result
+
+Demo world: 8 docs pages written for lumenpay 1.0, run against 2.0 (renamed
+`charge()`, renamed env var), model `deepseek-flash`, one run each:
+
+| | fixes sent | wrong fixes sent | verified by a re-run from zero |
+| --- | --- | --- | --- |
+| Fix-everything baseline (`--no-gate`) | 4 | 1 | 3 of 4 |
+| Newt (docs-fault gate on) | 2 | 0 | 2 of 2 |
+
+Newt also held back one real break it could not prove (flagged for a person).
+Details and failures along the way: [hackathon.md](hackathon.md).
+
 ## Prior art
 
 [quickstarted](https://pypi.org/project/quickstarted/) already runs an agent in
